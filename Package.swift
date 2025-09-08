@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "AuthPackage",
+    platforms: [.iOS(.v15), .macOS(.v12)],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
@@ -16,9 +17,13 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "AuthPackage"),
+        path: "Sources/AuthPackage"
+
         .testTarget(
             name: "AuthPackageTests",
-            dependencies: ["AuthPackage"]
+            dependencies: ["AuthPackage"],
+            path: "Tests/AuthPackageTests"
+
         ),
     ]
 )
