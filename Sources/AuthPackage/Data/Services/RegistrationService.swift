@@ -5,3 +5,44 @@
 //  Created by Zaid MOUMNI on 08/09/2025.
 //
 
+public final class RegistrationService: RegistrationServicing {
+    private let config: AuthConfiguration
+    private let net: NetworkClient
+    public init(config: AuthConfiguration, net: NetworkClient) {
+        self.config = config
+        self.net = net
+    }
+
+    public func register(
+        fname: String, lname: String, username: String, email: String,
+        phone: String, password: String, roles: [String]
+    ) async throws -> (String?, User?, String?) {
+        let env: AuthEnvelope = try await net.send(
+            baseURL: config.baseURL,
+            path: Endpoints.register,
+            method: .POST,
+            headers: [:],
+            body: [
+                "fullname": ["fname": fname, "lname": lname],
+                "username": username,
+                "email": email,
+                "phoneNumber": phone,
+                "password": password,
+                "roles": roles,
+            ]
+        )
+        return (env.message, env.user.map(Mapper.user), env.token)
+    }
+
+    public func verifyEmail(token: String) async throws -> (String?, User?) {
+        let path = "\(Endpoints.verifyEmail)?token=\(token)"
+        let env: AuthEnvelope = try await net.send(
+            baseURL: config.baseURL,
+            path: path,
+            method: .GET,
+            headers: [:],
+            body: nil
+        )
+        return (env.message, env.user.map(Mapper.user))
+    }
+}
