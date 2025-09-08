@@ -24,19 +24,20 @@ public final class LoginService: LoginServicing {
     }
 
     public func login(identifier: String, password: String, rememberMe: Bool)
-        async throws -> (
-            message: String?, user: User?, otpCode: String?, rememberMe: Bool?
-        )
+        async throws -> (String?, User?, String?, Bool?)
     {
         let env: AuthEnvelope = try await net.send(
-            baseURL: config.baseURL, path: Endpoints.login, method: .POST,
+            baseURL: config.baseURL,
+            path: Endpoints.login,
+            method: .POST,
             headers: [:],
             body: [
                 "identifier": identifier, "password": password,
                 "rememberMe": rememberMe,
-            ])
-
-        let user = env.user.map(Mapper.user)
-        return (env.message, user, env.otpCode?, env.rememberMe)
+            ]
+        )
+        return (
+            env.message, env.user.map(Mapper.user), env.otpCode, env.rememberMe
+        )
     }
 }
