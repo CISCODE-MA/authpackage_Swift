@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol AuthClientProtocol: Sendable {
+public protocol AuthClientProtocol {
     // Registration
     func register(
         fname: String, lname: String, username: String, email: String,
@@ -79,11 +79,12 @@ public final class AuthClient: AuthClientProtocol {
     // MARK: Login + OTP
     public func loginStart(
         identifier: String, password: String, rememberMe: Bool
-    ) async throws -> (String?, String?) {
+    )
+        async throws -> (otpSentTo: String?, debugOTP: String?)
+    {
         let (_, user, otpCode, _) = try await loginService.login(
             identifier: identifier, password: password, rememberMe: rememberMe)
-        // user may be present for convenience; not authenticated yet
-        return (user?.email, otpCode)  // otpCode may be omitted in prod
+        return (otpSentTo: user?.email, debugOTP: otpCode)
     }
 
     public func verifyOTP(identifier: String, otp: String) async throws -> User
@@ -91,14 +92,13 @@ public final class AuthClient: AuthClientProtocol {
         let (_, user, _) = try await otpService.verify(
             identifier: identifier, otp: otp)
         guard let user else { throw APIError.unknown }
-        self.currentUser = user
+        currentUser = user
         return user
     }
 
     // MARK: Session
     public func refreshIfNeeded() async throws {
         let current = try tokens.load()
-        // If you track expiry, use it; here we always try to refresh if possible
         _ = try await tokenService.refresh(using: current?.refreshToken)
     }
 

@@ -27,9 +27,10 @@ public final class TokenService: TokenServicing {
     }
 
     public func refresh(using refreshToken: String?) async throws -> String {
-        // If using HttpOnly cookie for refresh, body token can be nil; otherwise pass it.
         let env: AuthEnvelope = try await net.send(
-            baseURL: config.baseURL, path: Endpoints.refresh, method: .POST,
+            baseURL: config.baseURL,
+            path: Endpoints.refresh,
+            method: .POST,
             headers: [:],
             body: ["refreshToken": refreshToken as Any]
         )
@@ -45,7 +46,8 @@ public final class TokenService: TokenServicing {
     public func logout(accessToken: String) async throws -> String? {
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
-            path: Endpoints.logout, method: .POST,
+            path: Endpoints.logout,
+            method: .POST,
             headers: ["Authorization": "Bearer \(accessToken)"],
             body: nil
         )
@@ -55,7 +57,9 @@ public final class TokenService: TokenServicing {
 
     public func checkToken(_ token: String) async throws -> String? {
         let env: AuthEnvelope = try await net.send(
-            baseURL: config.baseURL, path: Endpoints.checkToken, method: .POST,
+            baseURL: config.baseURL,
+            path: Endpoints.checkToken,
+            method: .POST,
             headers: [:],
             body: ["token": token]
         )

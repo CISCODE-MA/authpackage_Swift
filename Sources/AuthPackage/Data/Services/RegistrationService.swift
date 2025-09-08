@@ -12,14 +12,15 @@ public protocol RegistrationServicing {
         fname: String, lname: String, username: String, email: String,
         phone: String, password: String, roles: [String]
     ) async throws -> (message: String?, user: User?, emailToken: String?)
-    func verifyEmail(token: String) async throws -> (
-        message: String?, user: User?
-    )
+
+    func verifyEmail(token: String)
+        async throws -> (message: String?, user: User?)
 }
 
 public final class RegistrationService: RegistrationServicing {
     private let config: AuthConfiguration
     private let net: NetworkClient
+
     public init(config: AuthConfiguration, net: NetworkClient) {
         self.config = config
         self.net = net
@@ -28,7 +29,7 @@ public final class RegistrationService: RegistrationServicing {
     public func register(
         fname: String, lname: String, username: String, email: String,
         phone: String, password: String, roles: [String]
-    ) async throws -> (String?, User?, String?) {
+    ) async throws -> (message: String?, user: User?, emailToken: String?) {
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
             path: Endpoints.register,
@@ -43,10 +44,15 @@ public final class RegistrationService: RegistrationServicing {
                 "roles": roles,
             ]
         )
-        return (env.message, env.user.map(Mapper.user), env.token)
+        return (
+            message: env.message, user: env.user.map(Mapper.user),
+            emailToken: env.token
+        )
     }
 
-    public func verifyEmail(token: String) async throws -> (String?, User?) {
+    public func verifyEmail(token: String)
+        async throws -> (message: String?, user: User?)
+    {
         let path = "\(Endpoints.verifyEmail)?token=\(token)"
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
@@ -55,6 +61,6 @@ public final class RegistrationService: RegistrationServicing {
             headers: [:],
             body: nil
         )
-        return (env.message, env.user.map(Mapper.user))
+        return (message: env.message, user: env.user.map(Mapper.user))
     }
 }

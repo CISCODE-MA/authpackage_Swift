@@ -8,9 +8,8 @@
 import Foundation
 
 public protocol OTPServicing {
-    func verify(identifier: String, otp: String) async throws -> (
-        message: String?, user: User?, accessToken: String?
-    )
+    func verify(identifier: String, otp: String)
+        async throws -> (message: String?, user: User?, accessToken: String?)
 }
 
 public final class OTPService: OTPServicing {
@@ -26,9 +25,9 @@ public final class OTPService: OTPServicing {
         self.tokens = tokens
     }
 
-    public func verify(identifier: String, otp: String) async throws -> (
-        String?, User?, String?
-    ) {
+    public func verify(identifier: String, otp: String)
+        async throws -> (message: String?, user: User?, accessToken: String?)
+    {
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
             path: Endpoints.verifyOTP,
@@ -39,6 +38,9 @@ public final class OTPService: OTPServicing {
         if let access = env.accessToken {
             try? tokens.save(Tokens(accessToken: access))
         }
-        return (env.message, env.user.map(Mapper.user), env.accessToken)
+        return (
+            message: env.message, user: env.user.map(Mapper.user),
+            accessToken: env.accessToken
+        )
     }
 }

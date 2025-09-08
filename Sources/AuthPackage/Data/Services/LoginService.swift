@@ -24,7 +24,9 @@ public final class LoginService: LoginServicing {
     }
 
     public func login(identifier: String, password: String, rememberMe: Bool)
-        async throws -> (String?, User?, String?, Bool?)
+        async throws -> (
+            message: String?, user: User?, otpCode: String?, rememberMe: Bool?
+        )
     {
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
@@ -37,7 +39,10 @@ public final class LoginService: LoginServicing {
             ]
         )
         return (
-            env.message, env.user.map(Mapper.user), env.otpCode, env.rememberMe
+            message: env.message,
+            user: env.user.map(Mapper.user),
+            otpCode: env.otpCode,
+            rememberMe: env.rememberMe
         )
     }
 }
