@@ -27,15 +27,18 @@ public final class OTPService: OTPServicing {
     }
 
     public func verify(identifier: String, otp: String) async throws -> (
-        message: String?, user: User?, accessToken: String?
+        String?, User?, String?
     ) {
         let env: AuthEnvelope = try await net.send(
-            baseURL: config.baseURL, path: Endpoints.verifyOTP, method: .POST,
-            headers: [:], bode: ["identifier": identifier, "otp": otp])
-        let user = env.user.map(Mapper.user)
+            baseURL: config.baseURL,
+            path: Endpoints.verifyOTP,
+            method: .POST,
+            headers: [:],
+            body: ["identifier": identifier, "otp": otp]
+        )
         if let access = env.accessToken {
             try? tokens.save(Tokens(accessToken: access))
         }
-        return (env.message, user, env.accessToken)
+        return (env.message, env.user.map(Mapper.user), env.accessToken)
     }
 }
