@@ -36,7 +36,6 @@ public final class KeychainTokenStore: TokenStore {
             kSecAttrAccount as String: account,
             kSecValueData as String: data,
         ]
-
         let status = SecItemAdd(q as CFDictionary, nil)
         guard status == errSecSuccess else { throw APIError.unknown }
     }
@@ -49,19 +48,17 @@ public final class KeychainTokenStore: TokenStore {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
-
         var r: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &r)
         guard status == errSecSuccess, let data = r as? Data else { return nil }
 
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let access = obj?["accessToken"] as? String ?? ""
-        let refresh = obj?("refreshToken") as? String ?? ""
+        let refresh = obj?["refreshToken"] as? String
         let expiry = (obj?["expiry"] as? TimeInterval).map(
             Date.init(timeIntervalSince1970:))
-        return tokens(
+        return Tokens(
             accessToken: access, refreshToken: refresh, expiry: expiry)
-
     }
 
     public func clear() throws { try deleteItem() }

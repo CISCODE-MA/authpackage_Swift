@@ -11,9 +11,7 @@ enum Mapper {
     static func user(_ dto: UserDTO) -> User {
         User(
             id: dto.id,
-            fullname: dto.fullname.map {
-                Fullname(fname: $0.fname, lname: $0.lname)
-            },
+            fullname: dto.fullname.map { Fullname(fname: $0.fname, lname: $0.lname) },
             username: dto.username,
             email: dto.email,
             phoneNumber: dto.phoneNumber,

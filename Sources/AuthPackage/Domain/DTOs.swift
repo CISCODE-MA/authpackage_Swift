@@ -9,16 +9,16 @@ import Foundation
 
 public struct AuthEnvelope: Codable, Sendable {
     public let message: String?
-    public let user: UserDto?
+    public let user: UserDTO?
     public let otpCode: String?
     public let rememberMe: Bool?
     public let accessToken: String?
     public let token: String?
 }
 
-public struct UserDto: Codable, Sendable {
+public struct UserDTO: Codable, Sendable {
     public let id: String?
-    public let fullname: FullNameDTO?
+    public let fullname: FullnameDTO?
     public let username: String
     public let email: String
     public let phoneNumber: String?

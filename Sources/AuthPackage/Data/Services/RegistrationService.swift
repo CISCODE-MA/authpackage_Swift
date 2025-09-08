@@ -5,6 +5,18 @@
 //  Created by Zaid MOUMNI on 08/09/2025.
 //
 
+import Foundation
+
+public protocol RegistrationServicing {
+    func register(
+        fname: String, lname: String, username: String, email: String,
+        phone: String, password: String, roles: [String]
+    ) async throws -> (message: String?, user: User?, emailToken: String?)
+    func verifyEmail(token: String) async throws -> (
+        message: String?, user: User?
+    )
+}
+
 public final class RegistrationService: RegistrationServicing {
     private let config: AuthConfiguration
     private let net: NetworkClient

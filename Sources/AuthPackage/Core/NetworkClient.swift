@@ -13,6 +13,6 @@ public protocol NetworkClient {
         path: String,
         method: HTTPMethod,
         headers: [String: String],
-        bode: [String: Any]?
+        body: [String: Any]?
     ) async throws -> T
 }

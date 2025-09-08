@@ -19,7 +19,6 @@ public protocol PasswordResetServicing {
 public final class PasswordResetService: PasswordResetServicing {
     private let config: AuthConfiguration
     private let net: NetworkClient
-
     public init(config: AuthConfiguration, net: NetworkClient) {
         self.config = config
         self.net = net
@@ -27,8 +26,10 @@ public final class PasswordResetService: PasswordResetServicing {
 
     public func requestReset(email: String) async throws -> (String?, String?) {
         let env: AuthEnvelope = try await net.send(
-            baseURL: config.baseURL, path: Endpoints.requestPasswordRest,
-            method: .POST, headers: [:], body: ["email": email])
+            baseURL: config.baseURL, path: Endpoints.requestPasswordReset,
+            method: .POST, headers: [:],
+            body: ["email": email]
+        )
         return (env.message, env.token)
     }
 
@@ -41,7 +42,8 @@ public final class PasswordResetService: PasswordResetServicing {
             body: [
                 "token": token, "newPassword": newPassword,
                 "confirmNewPassword": newPassword,
-            ])
+            ]
+        )
         return env.message
     }
 }
