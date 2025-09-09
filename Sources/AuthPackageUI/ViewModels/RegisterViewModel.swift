@@ -1,3 +1,10 @@
+//
+//  RegisterViewModel.swift
+//  AuthPackage
+//
+//  Created by Zaid MOUMNI on 09/09/2025.
+//
+
 import Foundation
 
 @MainActor
@@ -16,7 +23,7 @@ public final class RegisterViewModel: ObservableObject {
     @Published public private(set) var isLoading: Bool = false
     @Published public private(set) var errorMessage: String? = nil
 
-    /// Called on successful registration; host app can navigate to EmailVerificationView.
+    /// Host can observe and navigate to EmailVerificationView.
     public var onRegistered: (() -> Void)?
 
     public init(client: AuthClienting) {
@@ -30,22 +37,31 @@ public final class RegisterViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             try await client.register(
-                firstName: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
-                lastName: lastName.trimmingCharacters(in: .whitespacesAndNewlines),
-                username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+                firstName: firstName.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ),
+                lastName: lastName.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ),
+                username: username.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ),
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                 phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password
             )
             onRegistered?()
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription
+            errorMessage =
+                (error as? LocalizedError)?.errorDescription
                 ?? "Something went wrong. Please try again."
         }
     }
 
     private func validateInputs() -> Bool {
-        if firstName.isEmpty || lastName.isEmpty || username.isEmpty || email.isEmpty || password.isEmpty {
+        if firstName.isEmpty || lastName.isEmpty || username.isEmpty
+            || email.isEmpty || password.isEmpty
+        {
             errorMessage = "Please fill all required fields."
             return false
         }
