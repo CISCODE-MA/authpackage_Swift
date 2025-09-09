@@ -20,6 +20,10 @@ public protocol AuthClientProtocol {
         async throws -> (otpSentTo: String?, debugOTP: String?)
     func verifyOTP(identifier: String, otp: String) async throws -> User
 
+    // Password Reset
+    func requestPasswordReset(email: String) async throws
+    func resetPassword(token: String, newPassword: String) async throws
+
     // Session
     func refreshIfNeeded() async throws
     func logout() async throws
@@ -96,6 +100,15 @@ public final class AuthClient: AuthClientProtocol {
         return user
     }
 
+    // MARK: Password Reset
+    public func requestPasswordReset(email: String) async throws {
+        _ = try await resetService.requestReset(email: email)
+    }
+
+    public func resetPassword(token: String, newPassword: String) async throws {
+        _ = try await resetService.reset(token: token, newPassword: newPassword)
+    }
+    
     // MARK: Session
     public func refreshIfNeeded() async throws {
         let current = try tokens.load()
