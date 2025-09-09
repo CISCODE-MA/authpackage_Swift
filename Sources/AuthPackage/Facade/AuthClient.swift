@@ -10,8 +10,13 @@ import Foundation
 public protocol AuthClientProtocol {
     // Registration
     func register(
-        fname: String, lname: String, username: String, email: String,
-        phone: String, password: String, roles: [String]
+        fname: String,
+        lname: String,
+        username: String,
+        email: String,
+        phone: String,
+        password: String,
+        roles: [String]
     ) async throws -> User?
     func verifyEmail(token: String) async throws
 
@@ -19,6 +24,10 @@ public protocol AuthClientProtocol {
     func loginStart(identifier: String, password: String, rememberMe: Bool)
         async throws -> (otpSentTo: String?, debugOTP: String?)
     func verifyOTP(identifier: String, otp: String) async throws -> User
+
+    // Password Reset
+    func requestPasswordReset(email: String) async throws
+    func resetPassword(token: String, newPassword: String) async throws
 
     // Session
     func refreshIfNeeded() async throws
@@ -52,23 +61,44 @@ public final class AuthClient: AuthClientProtocol {
 
         self.loginService = LoginService(config: config, net: networkClient)
         self.otpService = OTPService(
-            config: config, net: networkClient, tokens: tokenStore)
+            config: config,
+            net: networkClient,
+            tokens: tokenStore
+        )
         self.regService = RegistrationService(
-            config: config, net: networkClient)
+            config: config,
+            net: networkClient
+        )
         self.resetService = PasswordResetService(
-            config: config, net: networkClient)
+            config: config,
+            net: networkClient
+        )
         self.tokenService = TokenService(
-            config: config, net: networkClient, tokens: tokenStore)
+            config: config,
+            net: networkClient,
+            tokens: tokenStore
+        )
     }
 
     // MARK: Registration
     public func register(
-        fname: String, lname: String, username: String, email: String,
-        phone: String, password: String, roles: [String]
+        fname: String,
+        lname: String,
+        username: String,
+        email: String,
+        phone: String,
+        password: String,
+        roles: [String]
     ) async throws -> User? {
         let (_, user, _) = try await regService.register(
-            fname: fname, lname: lname, username: username, email: email,
-            phone: phone, password: password, roles: roles)
+            fname: fname,
+            lname: lname,
+            username: username,
+            email: email,
+            phone: phone,
+            password: password,
+            roles: roles
+        )
         return user
     }
 
@@ -78,28 +108,51 @@ public final class AuthClient: AuthClientProtocol {
 
     // MARK: Login + OTP
     public func loginStart(
-        identifier: String, password: String, rememberMe: Bool
-    )
-        async throws -> (otpSentTo: String?, debugOTP: String?)
-    {
-        let (_, user, otpCode, _) = try await loginService.login(
-            identifier: identifier, password: password, rememberMe: rememberMe)
-        return (otpSentTo: user?.email, debugOTP: otpCode)
+        identifier: String,
+        password: String,
+        rememberMe: Bool
+    ) async throws -> (otpSentTo: String?, debugOTP: String?) {
+        let (_, user, otpCode, _, maybeAccess) = try await loginService.login(
+            identifier: identifier,
+            password: password,
+            rememberMe: rememberMe
+        )  // login may return accessToken now :contentReference[oaicite:6]{index=6}
+
+        if let token = maybeAccess {
+            // Trusted device: token returned immediately (no OTP)
+            try? tokens.save(Tokens(accessToken: token))
+            if let u = user { currentUser = u }
+            return (otpSentTo: nil, debugOTP: nil)
+        } else {
+            // New/untrusted device: OTP required
+            return (otpSentTo: user?.email, debugOTP: otpCode)
+        }
     }
 
     public func verifyOTP(identifier: String, otp: String) async throws -> User
     {
         let (_, user, _) = try await otpService.verify(
-            identifier: identifier, otp: otp)
+            identifier: identifier,
+            otp: otp
+        )
         guard let user else { throw APIError.unknown }
         currentUser = user
         return user
     }
 
+    // MARK: Password Reset
+    public func requestPasswordReset(email: String) async throws {
+        _ = try await resetService.requestReset(email: email)
+    }
+
+    public func resetPassword(token: String, newPassword: String) async throws {
+        _ = try await resetService.reset(token: token, newPassword: newPassword)
+    }
+
     // MARK: Session
     public func refreshIfNeeded() async throws {
         let current = try tokens.load()
-        _ = try await tokenService.refresh(using: current?.refreshToken)
+        _ = try await tokenService.refresh(using: current?.refreshToken)  // cookie flow ignores body
     }
 
     public func logout() async throws {
