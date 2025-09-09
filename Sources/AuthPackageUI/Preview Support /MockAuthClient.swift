@@ -10,6 +10,10 @@ import Foundation
 public struct MockAuthClient: AuthClienting {
     public init() {}
 
+    private var isPreview: Bool {
+        ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    }
+
     public func register(
         firstName: String,
         lastName: String,
@@ -18,26 +22,26 @@ public struct MockAuthClient: AuthClienting {
         phone: String,
         password: String
     ) async throws {
-        try await Task.sleep(nanoseconds: 350_000_000)
+        if !isPreview { try await Task.sleep(nanoseconds: 150_000_000) }
         if email.lowercased().contains("fail") {
             throw AuthUIError.operationFailed("Email already used.")
         }
     }
 
     public func requestPasswordReset(email: String) async throws {
-        try await Task.sleep(nanoseconds: 250_000_000)
+        if !isPreview { try await Task.sleep(nanoseconds: 120_000_000) }
         if !email.contains("@") {
             throw AuthUIError.invalidInput("Invalid email.")
         }
     }
 
     public func resetPassword(token: String, newPassword: String) async throws {
-        try await Task.sleep(nanoseconds: 250_000_000)
+        if !isPreview { try await Task.sleep(nanoseconds: 120_000_000) }
         if token.isEmpty { throw AuthUIError.invalidInput("Missing token.") }
     }
 
     public func verifyEmail(token: String) async throws {
-        try await Task.sleep(nanoseconds: 200_000_000)
+        if !isPreview { try await Task.sleep(nanoseconds: 100_000_000) }
         if token == "bad" { throw AuthUIError.operationFailed("Bad token.") }
     }
 }

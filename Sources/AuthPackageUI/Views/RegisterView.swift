@@ -11,6 +11,9 @@ public struct RegisterView: View {
     @ObservedObject private var viewModel: RegisterViewModel
     private var theme: AuthTheme
 
+    @FocusState private var focus: Field?
+    enum Field { case fname, lname, username, email, phone, password }
+
     public init(viewModel: RegisterViewModel, theme: AuthTheme = .init()) {
         self.viewModel = viewModel
         self.theme = theme
@@ -18,13 +21,13 @@ public struct RegisterView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: theme.spacing) {
                 Text("Create your account")
                     .font(.title2).bold()
                     .foregroundStyle(theme.text)
 
-                GroupBox {
-                    VStack(spacing: 12) {
+                Group {
+                    AuthFormField(theme: theme, title: "Name") {
                         HStack {
                             TextField("First name", text: $viewModel.firstName)
                                 #if os(iOS)
@@ -32,21 +35,36 @@ public struct RegisterView: View {
                                     .textInputAutocapitalization(.words)
                                     .autocorrectionDisabled()
                                 #endif
+                                .focused($focus, equals: .fname)
                             TextField("Last name", text: $viewModel.lastName)
                                 #if os(iOS)
                                     .textContentType(.familyName)
                                     .textInputAutocapitalization(.words)
                                     .autocorrectionDisabled()
                                 #endif
+                                .focused($focus, equals: .lname)
                         }
+                    }
 
+                    AuthFormField(
+                        theme: theme,
+                        title: "Username",
+                        error: viewModel.usernameError
+                    ) {
                         TextField("Username", text: $viewModel.username)
                             #if os(iOS)
                                 .textContentType(.username)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                             #endif
+                            .focused($focus, equals: .username)
+                    }
 
+                    AuthFormField(
+                        theme: theme,
+                        title: "Email",
+                        error: viewModel.emailError
+                    ) {
                         TextField("Email", text: $viewModel.email)
                             #if os(iOS)
                                 .textContentType(.emailAddress)
@@ -54,38 +72,52 @@ public struct RegisterView: View {
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                             #endif
+                            .focused($focus, equals: .email)
+                    }
 
-                        TextField("Phone (optional)", text: $viewModel.phone)
+                    AuthFormField(theme: theme, title: "Phone (optional)") {
+                        TextField("Phone", text: $viewModel.phone)
                             #if os(iOS)
                                 .textContentType(.telephoneNumber)
                                 .keyboardType(.phonePad)
                             #endif
-
-                        SecureField("Password", text: $viewModel.password)
-                            #if os(iOS)
-                                .textContentType(.newPassword)
-                            #endif
+                            .focused($focus, equals: .phone)
                     }
+
+                    AuthFormField(
+                        theme: theme,
+                        title: "Password",
+                        error: viewModel.passwordError
+                    ) {
+                        PasswordField(
+                            "Password",
+                            text: $viewModel.password,
+                            theme: theme
+                        )
+                        .focused($focus, equals: .password)
+                    }
+
+                    PasswordStrengthView(for: viewModel.password)
                 }
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: theme.cornerRadius,
-                        style: .continuous
-                    )
-                )
 
                 if let error = viewModel.errorMessage {
                     InlineErrorView(message: error)
                 }
 
-                AuthPrimaryButton(
-                    viewModel.isLoading ? "Creating…" : "Create Account",
-                    disabled: viewModel.isLoading,
-                    theme: theme
-                ) {
-                    Task { await viewModel.submit() }
+                VStack(spacing: 8) {
+                    AuthPrimaryButton(
+                        viewModel.isLoading ? "Creating…" : "Create Account",
+                        disabled: !viewModel.canSubmit || viewModel.isLoading,
+                        theme: theme
+                    ) {
+                        Task { await submitOrMove() }
+                    }
+                    .accessibilityIdentifier("register.primaryButton")
+
+                    if viewModel.isLoading {
+                        ProgressView().progressViewStyle(.circular)
+                    }
                 }
-                .accessibilityIdentifier("register.primaryButton")
 
                 Text("By continuing you agree to our terms and privacy policy.")
                     .formCaption()
@@ -97,5 +129,22 @@ public struct RegisterView: View {
         }
         .navigationTitle("Register")
         .background(theme.background)
+        .onSubmit { Task { await submitOrMove() } }
+        #if os(iOS)
+            .submitLabel(.next)
+        #endif
+        .onAppear { focus = .fname }
+    }
+
+    private func submitOrMove() async {
+        switch focus {
+        case .fname: focus = .lname
+        case .lname: focus = .username
+        case .username: focus = .email
+        case .email: focus = .phone
+        case .phone: focus = .password
+        case .password, .none:
+            await viewModel.submit()
+        }
     }
 }

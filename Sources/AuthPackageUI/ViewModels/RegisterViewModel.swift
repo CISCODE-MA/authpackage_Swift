@@ -12,67 +12,73 @@ public final class RegisterViewModel: ObservableObject {
     private let client: AuthClienting
 
     // Inputs
-    @Published public var firstName: String = ""
-    @Published public var lastName: String = ""
-    @Published public var username: String = ""
-    @Published public var email: String = ""
-    @Published public var phone: String = ""
-    @Published public var password: String = ""
+    @Published public var firstName = ""
+    @Published public var lastName = ""
+    @Published public var username = ""
+    @Published public var email = ""
+    @Published public var phone = ""
+    @Published public var password = ""
 
     // Outputs
-    @Published public private(set) var isLoading: Bool = false
+    @Published public private(set) var isLoading = false
     @Published public private(set) var errorMessage: String? = nil
 
-    /// Host can observe and navigate to EmailVerificationView.
+    // Per-field errors
+    @Published public private(set) var emailError: String? = nil
+    @Published public private(set) var passwordError: String? = nil
+    @Published public private(set) var usernameError: String? = nil
+
     public var onRegistered: (() -> Void)?
 
-    public init(client: AuthClienting) {
-        self.client = client
+    public init(client: AuthClienting) { self.client = client }
+
+    public var canSubmit: Bool {
+        validate(soft: true)
+        return emailError == nil && passwordError == nil && usernameError == nil
+            && !firstName.isEmpty && !lastName.isEmpty
     }
 
     public func submit() async {
         errorMessage = nil
-        guard validateInputs() else { return }
+        guard validate(soft: false) else { return }
         isLoading = true
         defer { isLoading = false }
         do {
             try await client.register(
-                firstName: firstName.trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                ),
-                lastName: lastName.trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                ),
-                username: username.trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                ),
-                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
+                firstName: firstName.authTrimmed,
+                lastName: lastName.authTrimmed,
+                username: username.authTrimmed,
+                email: email.authTrimmed,
+                phone: phone.authTrimmed,
                 password: password
             )
+            #if os(iOS)
+                Haptics.success()
+            #endif
             onRegistered?()
         } catch {
+            #if os(iOS)
+                Haptics.error()
+            #endif
             errorMessage =
                 (error as? LocalizedError)?.errorDescription
                 ?? "Something went wrong. Please try again."
         }
     }
 
-    private func validateInputs() -> Bool {
-        if firstName.isEmpty || lastName.isEmpty || username.isEmpty
-            || email.isEmpty || password.isEmpty
-        {
+    @discardableResult
+    private func validate(soft: Bool) -> Bool {
+        emailError = email.authIsValidEmail ? nil : "Enter a valid email."
+        passwordError =
+            password.count >= 8
+            ? nil : "Password must be at least 8 characters."
+        usernameError =
+            username.count >= 3
+            ? nil : "Username must be at least 3 characters."
+        if !soft, firstName.isEmpty || lastName.isEmpty {
             errorMessage = "Please fill all required fields."
-            return false
         }
-        if !email.contains("@") || !email.contains(".") {
-            errorMessage = "Enter a valid email."
-            return false
-        }
-        if password.count < 8 {
-            errorMessage = "Password must be at least 8 characters."
-            return false
-        }
-        return true
+        return emailError == nil && passwordError == nil && usernameError == nil
+            && !firstName.isEmpty && !lastName.isEmpty
     }
 }

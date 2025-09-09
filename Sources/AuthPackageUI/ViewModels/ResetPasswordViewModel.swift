@@ -22,29 +22,37 @@ public final class ResetPasswordViewModel: ObservableObject {
         self.client = client
     }
 
+    public var canSubmit: Bool {
+        !token.isEmpty && newPassword.count >= 8 && !isLoading
+    }
+
     public func submit() async {
         errorMessage = nil
         didReset = false
-        guard !token.isEmpty else {
-            errorMessage = "Token required."
-            return
-        }
-        guard newPassword.count >= 8 else {
-            errorMessage = "Password must be at least 8 characters."
+        guard canSubmit else {
+            errorMessage =
+                token.isEmpty
+                ? "Token required." : "Password must be at least 8 characters."
             return
         }
         isLoading = true
         defer { isLoading = false }
         do {
             try await client.resetPassword(
-                token: token.trimmingCharacters(in: .whitespacesAndNewlines),
+                token: token,
                 newPassword: newPassword
             )
             didReset = true
+            #if os(iOS)
+                Haptics.success()
+            #endif
         } catch {
             errorMessage =
                 (error as? LocalizedError)?.errorDescription
                 ?? "Could not reset password."
+            #if os(iOS)
+                Haptics.error()
+            #endif
         }
     }
 }
