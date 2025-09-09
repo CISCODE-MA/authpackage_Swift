@@ -11,35 +11,53 @@ import XCTest
 
 final class AuthClientTests: XCTestCase {
     func testLoginFlow() async throws {
-        let cfg = AuthConfiguration(
-            baseURL: URL(string: "http://localhost:3000")!)
+        let base = URL(string: "http://localhost")!
         let net = NetworkClientMock()
-        let tokens = InMemoryTokenStore()
+        let config = AuthConfiguration(baseURL: base)
+        let store = InMemoryTokenStore()
         let client = AuthClient(
-            config: cfg, networkClient: net, tokenStore: tokens)
+            config: config,
+            networkClient: net,
+            tokenStore: store
+        )
 
-        // 1) login start returns otp prompt
-        net.stub = AuthEnvelope(
-            message: "OTP sent",
-            user: UserDTO(
-                id: "1", fullname: nil, username: "u", email: "e@x.com",
-                phoneNumber: nil, roles: []), otpCode: "123456",
-            rememberMe: true, accessToken: nil, token: nil)
-        let (email, otp) = try await client.loginStart(
-            identifier: "e@x.com", password: "pw", rememberMe: true)
-        XCTAssertEqual(email, "e@x.com")
-        XCTAssertEqual(otp, "123456")
+        let user = UserDTO.fixture()
 
-        // 2) verify otp returns access token
-        net.stub = AuthEnvelope(
-            message: "OK",
-            user: UserDTO(
-                id: "1", fullname: nil, username: "u", email: "e@x.com",
-                phoneNumber: nil, roles: []), otpCode: nil, rememberMe: nil,
-            accessToken: "access123", token: nil)
-        let user = try await client.verifyOTP(
-            identifier: "e@x.com", otp: "123456")
-        XCTAssertEqual(user.email, "e@x.com")
-        XCTAssertEqual(client.accessToken, "access123")
+        // login
+        net.stub(
+            .POST,
+            Endpoints.login,
+            with: .encodable(
+                Envelope(
+                    message: "OTP sent",
+                    otpCode: "123456",
+                    rememberMe: true,
+                    user: user
+                )
+            )
+        )
+        // verify
+        net.stub(
+            .POST,
+            Endpoints.verifyOTP,
+            with: .encodable(
+                Envelope(message: "OK", accessToken: "acc_123", user: user)
+            )
+        )
+
+        let (otpSentTo, debugOTP) = try await client.loginStart(
+            identifier: "john@example.com",
+            password: "pw",
+            rememberMe: true
+        )
+        XCTAssertEqual(otpSentTo, "john@example.com")
+        XCTAssertEqual(debugOTP, "123456")
+
+        let loggedIn = try await client.verifyOTP(
+            identifier: "john@example.com",
+            otp: "123456"
+        )
+        XCTAssertEqual(loggedIn.email, "john@example.com")
+        XCTAssertEqual(client.accessToken, "acc_123")
     }
 }
