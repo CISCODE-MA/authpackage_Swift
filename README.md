@@ -96,18 +96,20 @@ Tests/
 ---
 
 ## 🧪 Running Tests
+Make sure you have Xcode 16.1+ (Swift 6.1) installed and selected:
+```bash 
+sudo xcode-select -s /Applications/Xcode.app
+swift --version
+```
+
 ```bash
 swift test 
  ``` 
  
-Make sure you have Xcode 16.1+ (Swift 6.1) installed and selected:
-```bash 
-sudo xcode-select -s /Applications/Xcode.app
-swift --version```
-
 ---
 
 ## 📌 Roadmap
+
 * v1.0.0 → Core authentication logic (this version)
 
 * v1.1.0 → Optional UI components (SwiftUI views for Login, OTP, etc.)
