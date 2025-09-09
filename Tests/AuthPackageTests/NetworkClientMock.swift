@@ -9,30 +9,20 @@ import Foundation
 
 @testable import AuthPackage
 
-// File-scope eraser so we can encode any Encodable
-struct AnyEncodable: Encodable {
-    private let _encode: (Encoder) throws -> Void
-    init(_ value: Encodable) { self._encode = value.encode }
-    func encode(to encoder: Encoder) throws { try _encode(encoder) }
-}
-
 final class NetworkClientMock: NetworkClient {
     struct Key: Hashable {
-        let method: HTTPMethod
         let path: String
+        let method: HTTPMethod
     }
-    enum Stub {
-        case json(String)
-        case encodable(Encodable)
-        case error(Error)
-    }
+    private var map: [Key: Any] = [:]
 
-    private var stubs: [Key: Stub] = [:]
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
-
-    func stub(_ method: HTTPMethod, _ path: String, with stub: Stub) {
-        stubs[Key(method: method, path: path)] = stub
+    func register<T: Decodable>(
+        _ type: T.Type,
+        path: String,
+        method: HTTPMethod,
+        value: T
+    ) {
+        map[Key(path: path, method: method)] = value
     }
 
     func send<T: Decodable>(
@@ -42,17 +32,12 @@ final class NetworkClientMock: NetworkClient {
         headers: [String: String],
         body: [String: Any]?
     ) async throws -> T {
-        guard let stub = stubs[Key(method: method, path: path)] else {
-            throw APIError.unknown
+        guard let v = map[Key(path: path, method: method)] as? T else {
+            throw APIError.server(
+                status: 500,
+                message: "No stub for \(method.rawValue) \(path)"
+            )
         }
-        switch stub {
-        case .error(let e):
-            throw e
-        case .json(let json):
-            return try decoder.decode(T.self, from: Data(json.utf8))
-        case .encodable(let value):
-            let data = try encoder.encode(AnyEncodable(value))
-            return try decoder.decode(T.self, from: data)
-        }
+        return v
     }
 }

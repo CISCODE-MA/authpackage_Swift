@@ -10,55 +10,55 @@ import XCTest
 @testable import AuthPackage
 
 final class RegistrationTests: XCTestCase {
-
-    func testRegisterAndVerifyEmail() async throws {
-        let base = URL(string: "http://localhost")!
+    func testRegister_andVerifyEmail() async throws {
         let net = NetworkClientMock()
-
-        // Use a single source of truth for the email under test
-        let expectedEmail = "john@example.com"
-        var user = UserDTO.fixture(email: expectedEmail)  // ensure stubbed user matches
-
-        // Stub register -> returns user + email token
-        net.stub(
-            .POST,
-            Endpoints.register,
-            with: .encodable(
-                Envelope(message: "ok", token: "email_tkn_123", user: user)
+        // register → returns user + token (email verify token)
+        net.register(
+            AuthEnvelope.self,
+            path: Endpoints.register,
+            method: .POST,
+            value: .init(
+                message: "reg-ok",
+                user: Fixtures.dtoUser,
+                otpCode: nil,
+                rememberMe: nil,
+                accessToken: nil,
+                token: "email-token"
             )
         )
-        // Stub verify email -> returns same user
-        net.stub(
-            .GET,
-            "\(Endpoints.verifyEmail)?token=email_tkn_123",
-            with: .encodable(
-                Envelope(message: "verified", user: user)
+        // verify-email GET
+        net.register(
+            AuthEnvelope.self,
+            path: "\(Endpoints.verifyEmail)?token=email-token",
+            method: .GET,
+            value: .init(
+                message: "verified",
+                user: Fixtures.dtoUser,
+                otpCode: nil,
+                rememberMe: nil,
+                accessToken: nil,
+                token: nil
             )
         )
 
-        let config = AuthConfiguration(baseURL: base)
-        let store = InMemoryTokenStore()
+        let cfg = AuthConfiguration(baseURL: Fixtures.baseURL)
         let client = AuthClient(
-            config: config,
+            config: cfg,
             networkClient: net,
-            tokenStore: store
+            tokenStore: InMemoryTokenStore()
         )
 
-        // register
-        let u = try await client.register(
-            fname: "John",
+        let user = try await client.register(
+            fname: "Jane",
             lname: "Doe",
-            username: "johndoe",
-            email: expectedEmail,
-            phone: "+123456789",
+            username: "jane",
+            email: "jane@example.com",
+            phone: "",
             password: "pw",
             roles: ["user"]
         )
+        XCTAssertEqual(user?.email, Fixtures.user.email)
 
-        // Normalize case to avoid case-sensitivity flakes
-        XCTAssertEqual(u?.email.lowercased(), expectedEmail.lowercased())
-
-        // verify
-        try await client.verifyEmail(token: "email_tkn_123")
+        try await client.verifyEmail(token: "email-token")  // simple smoke test
     }
 }
