@@ -1,3 +1,10 @@
+//
+//  EmailVerificationViewModel.swift
+//  AuthPackage
+//
+//  Created by Zaid MOUMNI on 09/09/2025.
+//
+
 import Foundation
 
 @MainActor
@@ -24,10 +31,13 @@ public final class EmailVerificationViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            try await client.verifyEmail(token: token.trimmingCharacters(in: .whitespacesAndNewlines))
+            try await client.verifyEmail(
+                token: token.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
             isVerified = true
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription
+            errorMessage =
+                (error as? LocalizedError)?.errorDescription
                 ?? "Verification failed."
         }
     }
