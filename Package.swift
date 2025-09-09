@@ -8,7 +8,8 @@ let package = Package(
     platforms: [.iOS(.v15), .macOS(.v12)],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
-        .library(name: "AuthPackage", targets: ["AuthPackage"])
+        .library(name: "AuthPackage", targets: ["AuthPackage"]),
+        .library(name: "AuthPackageUI", targets: ["AuthPackageUI"]),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -16,7 +17,13 @@ let package = Package(
         .target(
             name: "AuthPackage",
             dependencies: [],
-            path: "Sources"
+            path: "Sources/AuthPackage"
+        ),
+
+        .target(
+            name: "AuthPackageUI",
+            dependencies: ["AuthPackage"],
+            path: "Sources/AuthPackageUI"
         ),
 
         .testTarget(
