@@ -1,29 +1,45 @@
+//
+//  OTPViewModel.swift
+//  AuthPackage
+//
+//  Created by Zaid MOUMNI on 09/09/2025.
+//
+
 #if canImport(SwiftUI)
-import Foundation
-import AuthPackage
+    import Foundation
+    import AuthPackage
 
-@MainActor
-public final class OTPViewModel: ObservableObject {
-    private let client: AuthClientProtocol
-    private let identifier: String
+    @MainActor
+    public final class OTPViewModel: ObservableObject {
+        @preconcurrency
+        nonisolated(unsafe) private let client: AuthClientProtocol
 
-    @Published public var otp: String = ""
-    @Published public var isLoading = false
-    @Published public var error: String?
-    @Published public var user: User?
+        private let identifier: String
 
-    public init(client: AuthClientProtocol, identifier: String) {
-        self.client = client
-        self.identifier = identifier
-    }
+        @Published public var otp: String = ""
+        @Published public var isLoading = false
+        @Published public var errorMessage: String?
+        @Published public var user: User?
 
-    public func verify() async {
-        isLoading = true; defer { isLoading = false }
-        do {
-            user = try await client.verifyOTP(identifier: identifier, otp: otp)
-        } catch {
-            self.error = String(describing: error)
+        public init(client: AuthClientProtocol, identifier: String) {
+            self.client = client
+            self.identifier = identifier
+        }
+
+        public func verify() async {
+            isLoading = true
+            defer { isLoading = false }
+
+            do {
+                let u = try await client.verifyOTP(
+                    identifier: identifier,
+                    otp: otp
+                )
+                user = u
+                errorMessage = nil
+            } catch {
+                errorMessage = String(describing: error)
+            }
         }
     }
-}
 #endif
