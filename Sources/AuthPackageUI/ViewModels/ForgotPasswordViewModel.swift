@@ -1,3 +1,10 @@
+//
+//  ForgotPasswordViewModel.swift
+//  AuthPackage
+//
+//  Created by Zaid MOUMNI on 09/09/2025.
+//
+
 import Foundation
 
 @MainActor
@@ -24,10 +31,13 @@ public final class ForgotPasswordViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            try await client.requestPasswordReset(email: email.trimmingCharacters(in: .whitespacesAndNewlines))
+            try await client.requestPasswordReset(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
             emailSent = true
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription
+            errorMessage =
+                (error as? LocalizedError)?.errorDescription
                 ?? "Could not send reset email."
         }
     }

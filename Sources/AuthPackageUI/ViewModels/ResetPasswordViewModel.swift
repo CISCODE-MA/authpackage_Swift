@@ -1,3 +1,10 @@
+//
+//  ResetPasswordViewModel.swift
+//  AuthPackage
+//
+//  Created by Zaid MOUMNI on 09/09/2025.
+//
+
 import Foundation
 
 @MainActor
@@ -35,7 +42,8 @@ public final class ResetPasswordViewModel: ObservableObject {
             )
             didReset = true
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription
+            errorMessage =
+                (error as? LocalizedError)?.errorDescription
                 ?? "Could not reset password."
         }
     }
