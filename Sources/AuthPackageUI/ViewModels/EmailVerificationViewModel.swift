@@ -20,25 +20,30 @@ public final class EmailVerificationViewModel: ObservableObject {
     public init(client: AuthClienting) {
         self.client = client
     }
+    public var canSubmit: Bool { !token.isEmpty && !isLoading }
 
     public func verify() async {
         errorMessage = nil
         isVerified = false
-        guard !token.isEmpty else {
+        guard canSubmit else {
             errorMessage = "Token required."
             return
         }
         isLoading = true
         defer { isLoading = false }
         do {
-            try await client.verifyEmail(
-                token: token.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+            try await client.verifyEmail(token: token)
             isVerified = true
+            #if os(iOS)
+                Haptics.success()
+            #endif
         } catch {
             errorMessage =
                 (error as? LocalizedError)?.errorDescription
                 ?? "Verification failed."
+            #if os(iOS)
+                Haptics.error()
+            #endif
         }
     }
 }

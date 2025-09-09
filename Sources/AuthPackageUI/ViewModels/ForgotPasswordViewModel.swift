@@ -21,24 +21,33 @@ public final class ForgotPasswordViewModel: ObservableObject {
         self.client = client
     }
 
+    public var canSubmit: Bool {
+        email.contains("@") && email.contains(".") && !isLoading
+    }
+
     public func submit() async {
         errorMessage = nil
         emailSent = false
-        guard email.contains("@"), email.contains(".") else {
+        guard canSubmit else {
             errorMessage = "Enter a valid email."
             return
         }
         isLoading = true
         defer { isLoading = false }
         do {
-            try await client.requestPasswordReset(
-                email: email.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+            try await client.requestPasswordReset(email: email)
             emailSent = true
+            #if os(iOS)
+                Haptics.success()
+            #endif
         } catch {
             errorMessage =
                 (error as? LocalizedError)?.errorDescription
                 ?? "Could not send reset email."
+            #if os(iOS)
+                Haptics.error()
+            #endif
         }
     }
+
 }

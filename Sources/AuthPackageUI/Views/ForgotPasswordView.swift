@@ -10,6 +10,7 @@ import SwiftUI
 public struct ForgotPasswordView: View {
     @ObservedObject private var viewModel: ForgotPasswordViewModel
     private var theme: AuthTheme
+    @FocusState private var focused: Bool
 
     public init(viewModel: ForgotPasswordViewModel, theme: AuthTheme = .init())
     {
@@ -18,15 +19,13 @@ public struct ForgotPasswordView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Forgot your password?")
-                .font(.title2).bold()
-                .foregroundStyle(theme.text)
+        VStack(alignment: .leading, spacing: theme.spacing) {
+            Text("Forgot your password?").font(.title2).bold().foregroundStyle(
+                theme.text
+            )
+            Text("Enter your email and we'll send a reset link.").formCaption()
 
-            Text("Enter your email and we'll send a reset link.")
-                .formCaption()
-
-            GroupBox {
+            AuthFormField(theme: theme, title: "Email") {
                 TextField("Email", text: $viewModel.email)
                     #if os(iOS)
                         .textContentType(.emailAddress)
@@ -34,19 +33,12 @@ public struct ForgotPasswordView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     #endif
-                    .padding(.vertical, 4)
+                    .focused($focused)
             }
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: theme.cornerRadius,
-                    style: .continuous
-                )
-            )
 
             if let error = viewModel.errorMessage {
                 InlineErrorView(message: error)
             }
-
             if viewModel.emailSent {
                 Label(
                     "Email sent — check your inbox.",
@@ -55,17 +47,19 @@ public struct ForgotPasswordView: View {
                 .foregroundStyle(.green)
             }
 
-            AuthPrimaryButton(
-                viewModel.isLoading ? "Sending…" : "Send reset link",
-                disabled: viewModel.isLoading,
-                theme: theme
-            ) {
-                Task { await viewModel.submit() }
+            VStack(spacing: 8) {
+                AuthPrimaryButton(
+                    viewModel.isLoading ? "Sending…" : "Send reset link",
+                    disabled: !viewModel.canSubmit,
+                    theme: theme
+                ) { Task { await viewModel.submit() } }
+                if viewModel.isLoading { ProgressView() }
             }
         }
         .padding(theme.spacing * 1.5)
         .frame(maxWidth: 480)
         .navigationTitle("Forgot Password")
         .background(theme.background)
+        .onAppear { focused = true }
     }
 }
