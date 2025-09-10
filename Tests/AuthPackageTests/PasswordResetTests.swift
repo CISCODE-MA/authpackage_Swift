@@ -10,38 +10,46 @@ import XCTest
 @testable import AuthPackage
 
 final class PasswordResetTests: XCTestCase {
-
-    func testRequestAndResetPassword() async throws {
-        let base = URL(string: "http://localhost")!
+    func testRequestReset_thenReset() async throws {
         let net = NetworkClientMock()
-        let config = AuthConfiguration(baseURL: base)
-
-        // Stubs
-        net.stub(
-            .POST,
-            Endpoints.requestPasswordReset,
-            with: .encodable(
-                Envelope(message: "email sent", token: "reset_tkn_456")
+        net.register(
+            AuthEnvelope.self,
+            path: Endpoints.requestPasswordReset,
+            method: .POST,
+            value: .init(
+                message: "email-sent",
+                user: nil,
+                otpCode: nil,
+                rememberMe: nil,
+                accessToken: nil,
+                token: "reset-token"
             )
         )
-        net.stub(
-            .PATCH,
-            Endpoints.resetPassword,
-            with: .encodable(
-                Envelope(message: "password updated")
+        net.register(
+            AuthEnvelope.self,
+            path: Endpoints.resetPassword,
+            method: .PATCH,
+            value: .init(
+                message: "reset-ok",
+                user: nil,
+                otpCode: nil,
+                rememberMe: nil,
+                accessToken: nil,
+                token: nil
             )
         )
 
-        // Use the service directly (facade methods optional)
-        let reset = PasswordResetService(config: config, net: net)
-        let req = try await reset.requestReset(email: "john@example.com")
-        XCTAssertEqual(req.message, "email sent")
-        XCTAssertEqual(req.token, "reset_tkn_456")
-
-        let msg = try await reset.reset(
-            token: req.token ?? "",
-            newPassword: "newpass"
+        let cfg = AuthConfiguration(baseURL: Fixtures.baseURL)
+        let client = AuthClient(
+            config: cfg,
+            networkClient: net,
+            tokenStore: InMemoryTokenStore()
         )
-        XCTAssertEqual(msg, "password updated")
+
+        try await client.requestPasswordReset(email: "jane@example.com")
+        try await client.resetPassword(
+            token: "reset-token",
+            newPassword: "newpw"
+        )
     }
 }

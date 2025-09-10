@@ -9,33 +9,64 @@ import Foundation
 
 @testable import AuthPackage
 
-// Minimal server envelope matching your DTOs
-struct Envelope: Encodable {
-    var message: String? = nil
-    var token: String? = nil
-    var accessToken: String? = nil
-    var otpCode: String? = nil
-    var rememberMe: Bool? = nil
-    var user: UserDTO? = nil
-}
+enum Fixtures {
+    static let baseURL = URL(string: "https://api.example.test")!
 
-// Correct argument order for your UserDTO.init(id:fullname:username:email:phoneNumber:roles:)
-extension UserDTO {
-    static func fixture(
-        id: String = "u_1",
-        email: String = "john@example.com",
-        username: String = "johndoe",
-        fname: String = "John",
-        lname: String = "Doe",
-        phoneNumber: String? = "+123456789"
-    ) -> UserDTO {
+    static let dtoUser = UserDTO(
+        id: "u1",
+        fullname: FullnameDTO(fname: "Jane", lname: "Doe"),
+        username: "jane",
+        email: "jane@example.com",
+        phoneNumber: nil,
+        roles: ["user"]
+    )
+
+    static let user = Mapper.user(dtoUser)
+
+    static func envLoginNoOTP(token: String) -> AuthEnvelope {
         .init(
-            id: id,
-            fullname: FullnameDTO(fname: fname, lname: lname),
-            username: username,
-            email: email,
-            phoneNumber: phoneNumber,
-            roles: ["user"]
+            message: "ok",
+            user: dtoUser,
+            otpCode: nil,
+            rememberMe: true,
+            accessToken: token,
+            token: nil
         )
     }
+
+    static func envLoginOTP(otp: String) -> AuthEnvelope {
+        .init(
+            message: "otp",
+            user: dtoUser,
+            otpCode: otp,
+            rememberMe: nil,
+            accessToken: nil,
+            token: nil
+        )
+    }
+
+    static func envVerifyOTP(token: String) -> AuthEnvelope {
+        .init(
+            message: "ok",
+            user: dtoUser,
+            otpCode: nil,
+            rememberMe: nil,
+            accessToken: token,
+            token: nil
+        )
+    }
+
+    static func envRefresh(token: String) -> AuthEnvelope {
+        .init(
+            message: "ok",
+            user: nil,
+            otpCode: nil,
+            rememberMe: nil,
+            accessToken: token,
+            token: nil
+        )
+    }
+
+    static let access1 = "access-1"
+    static let access2 = "access-2"
 }

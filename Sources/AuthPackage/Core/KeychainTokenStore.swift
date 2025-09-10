@@ -27,7 +27,8 @@ public final class KeychainTokenStore: TokenStore {
             "expiry": tokens.expiry?.timeIntervalSince1970,
         ]
         let data = try JSONSerialization.data(
-            withJSONObject: dict.compactMapValues { $0 })
+            withJSONObject: dict.compactMapValues { $0 }
+        )
 
         try deleteItem()
         let q: [String: Any] = [
@@ -53,12 +54,19 @@ public final class KeychainTokenStore: TokenStore {
         guard status == errSecSuccess, let data = r as? Data else { return nil }
 
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let access = obj?["accessToken"] as? String ?? ""
+        guard let access = obj?["accessToken"] as? String, !access.isEmpty
+        else {
+            return nil
+        }
         let refresh = obj?["refreshToken"] as? String
         let expiry = (obj?["expiry"] as? TimeInterval).map(
-            Date.init(timeIntervalSince1970:))
+            Date.init(timeIntervalSince1970:)
+        )
         return Tokens(
-            accessToken: access, refreshToken: refresh, expiry: expiry)
+            accessToken: access,
+            refreshToken: refresh,
+            expiry: expiry
+        )
     }
 
     public func clear() throws { try deleteItem() }

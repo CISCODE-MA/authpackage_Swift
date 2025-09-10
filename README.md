@@ -24,7 +24,7 @@ Add this package to your Xcode project:
 1. Go to **File > Add Package Dependencies…**  
 2. Enter the repo URL:  
 ```bash 
-https:github.com/Zaiidmo/AuthPackage-Swift.git 
+https://github.com/Zaiidmo/AuthPackage-Swift.git 
 ```
 3. Choose **Up to Next Major Version** from `1.0.0`.
 
@@ -76,7 +76,7 @@ try await authClient.refreshIfNeeded()
 ```
 ### 5. Logout
 ```swift 
-try await authClient.logour()
+try await authClient.logout()
 ```
 
 ---
