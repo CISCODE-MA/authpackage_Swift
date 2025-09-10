@@ -10,24 +10,21 @@ import Foundation
 public struct AuthConfiguration: Sendable {
     public let baseURL: URL
     public let refreshUsesCookie: Bool
-    public let providers: ProvidersConfig  // NEW
+    /// Custom URL scheme (or universal link domain) your host app handles, e.g. "authdemo"
+    public let redirectScheme: String?
+    /// Feature flags
+    public let microsoftEnabled: Bool
 
     public init(
         baseURL: URL,
         refreshUsesCookie: Bool = true,
-        providers: ProvidersConfig = .disabled
+        redirectScheme: String? = nil,
+        microsoftEnabled: Bool = false
     ) {
         self.baseURL = baseURL
         self.refreshUsesCookie = refreshUsesCookie
-        self.providers = providers
-    }
-}
-
-public struct ProvidersConfig: Sendable {
-    public var microsoft: MicrosoftConfig?
-    public static var disabled: ProvidersConfig { .init(microsoft: nil) }
-    public init(microsoft: MicrosoftConfig? = nil) {
-        self.microsoft = microsoft
+        self.redirectScheme = redirectScheme
+        self.microsoftEnabled = microsoftEnabled
     }
 }
 
