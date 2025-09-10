@@ -38,7 +38,6 @@ import AuthPackage
 
 let config = AuthConfiguration(baseURL: URL(string: "http://localhost:3000")!)
 let tokenStore = KeychainTokenStore(service: "com.yourapp.auth", account: "auth_tokens")
-
 let authClient = AuthClient(config: config, tokenStore: tokenStore)
 ```
 ### 2. Register a new user
@@ -115,3 +114,9 @@ swift test
 * v1.1.0 → Optional UI components (SwiftUI views for Login, OTP, etc.)
 
 * v2.0.0 → Advanced features (social logins, biometric helpers, role-based access)
+
+--- 
+
+## ⚖️ License
+MIT License © 2025 Zaid MOUMNI
+

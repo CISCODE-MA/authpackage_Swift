@@ -9,13 +9,14 @@ import Foundation
 
 enum Mapper {
     static func user(_ dto: UserDTO) -> User {
-        User(
-            id: dto.id,
-            fullname: dto.fullname.map { Fullname(fname: $0.fname, lname: $0.lname) },
-            username: dto.username,
+        let id = dto.id ?? dto._id ?? UUID().uuidString
+        return User(
+            id: id,
             email: dto.email,
-            phoneNumber: dto.phoneNumber,
-            roles: dto.roles
+            name: dto.name,
+            tenantId: dto.tenantId,
+            roles: dto.roles ?? [],
+            permissions: dto.permissions ?? []
         )
     }
 }

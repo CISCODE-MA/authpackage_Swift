@@ -7,16 +7,21 @@
 
 import Foundation
 
-public struct Fullname: Codable, Equatable, Sendable {
-    public let fname: String
-    public let lname: String
+public struct User: Equatable, Sendable {
+    public let id: String
+    public let email: String
+    public let name: String?
+    public let tenantId: String?
+    public let roles: [String]
+    public let permissions: [String]
 }
 
-public struct User: Codable, Equatable, Sendable {
-    public let id: String?
-    public let fullname: Fullname?
-    public let username: String
-    public let email: String
-    public let phoneNumber: String?
-    public let roles: [String]
+public struct Tokens: Equatable, Codable, Sendable {
+    public let accessToken: String
+    public let refreshToken: String?
+
+    public init(accessToken: String, refreshToken: String? = nil) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+    }
 }

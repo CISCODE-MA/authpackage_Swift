@@ -8,13 +8,15 @@
 import Foundation
 
 public protocol RegistrationServicing {
-    func register(
-        fname: String, lname: String, username: String, email: String,
-        phone: String, password: String, roles: [String]
-    ) async throws -> (message: String?, user: User?, emailToken: String?)
-
-    func verifyEmail(token: String)
-        async throws -> (message: String?, user: User?)
+    func createUser(
+        email: String,
+        password: String,
+        name: String?,
+        tenantId: String?,
+        roles: [String]?
+    ) async throws -> User
+    func inviteUser(email: String, name: String?, tenantId: String) async throws
+        -> String?
 }
 
 public final class RegistrationService: RegistrationServicing {
@@ -26,41 +28,44 @@ public final class RegistrationService: RegistrationServicing {
         self.net = net
     }
 
-    public func register(
-        fname: String, lname: String, username: String, email: String,
-        phone: String, password: String, roles: [String]
-    ) async throws -> (message: String?, user: User?, emailToken: String?) {
+    public func createUser(
+        email: String,
+        password: String,
+        name: String?,
+        tenantId: String?,
+        roles: [String]?
+    ) async throws -> User {
+        var body: [String: Any] = [
+            "email": email, "password": password, "tenantId": tenantId ?? "",
+        ]
+        if let name { body["name"] = name }
+        if let roles { body["roles"] = roles }
+
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
-            path: Endpoints.register,
+            path: Endpoints.registerUser,  // POST /api/users
             method: .POST,
             headers: [:],
-            body: [
-                "fullname": ["fname": fname, "lname": lname],
-                "username": username,
-                "email": email,
-                "phoneNumber": phone,
-                "password": password,
-                "roles": roles,
-            ]
+            body: body
         )
-        return (
-            message: env.message, user: env.user.map(Mapper.user),
-            emailToken: env.token
-        )
+        guard let dto = env.user else { throw APIError.unknown }
+        return Mapper.user(dto)
     }
 
-    public func verifyEmail(token: String)
-        async throws -> (message: String?, user: User?)
+    public func inviteUser(email: String, name: String?, tenantId: String)
+        async throws -> String?
     {
-        let path = "\(Endpoints.verifyEmail)?token=\(token)"
+        var body: [String: Any] = ["email": email, "tenantId": tenantId]
+        if let name { body["name"] = name }
+
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
-            path: path,
-            method: .GET,
+            path: Endpoints.inviteUser,  // POST /api/users/invite
+            method: .POST,
             headers: [:],
-            body: nil
+            body: body
         )
-        return (message: env.message, user: env.user.map(Mapper.user))
+        return env.message
     }
+
 }

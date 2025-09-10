@@ -24,7 +24,6 @@ public final class KeychainTokenStore: TokenStore {
         let dict: [String: Any?] = [
             "accessToken": tokens.accessToken,
             "refreshToken": tokens.refreshToken,
-            "expiry": tokens.expiry?.timeIntervalSince1970,
         ]
         let data = try JSONSerialization.data(
             withJSONObject: dict.compactMapValues { $0 }
@@ -59,13 +58,10 @@ public final class KeychainTokenStore: TokenStore {
             return nil
         }
         let refresh = obj?["refreshToken"] as? String
-        let expiry = (obj?["expiry"] as? TimeInterval).map(
-            Date.init(timeIntervalSince1970:)
-        )
+
         return Tokens(
             accessToken: access,
             refreshToken: refresh,
-            expiry: expiry
         )
     }
 

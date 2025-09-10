@@ -7,20 +7,6 @@
 
 import Foundation
 
-public struct Tokens: Equatable, Sendable {
-    public let accessToken: String
-    public let refreshToken: String?
-    public let expiry: Date?
-
-    public init(
-        accessToken: String, refreshToken: String? = nil, expiry: Date? = nil
-    ) {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
-        self.expiry = expiry
-    }
-}
-
 public protocol TokenStore {
     func save(_ tokens: Tokens) throws
     func load() throws -> Tokens?

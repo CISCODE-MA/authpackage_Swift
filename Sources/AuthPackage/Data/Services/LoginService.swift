@@ -8,48 +8,45 @@
 import Foundation
 
 public protocol LoginServicing {
-    /// Logs in with identifier (email/username) and password.
-    /// If device is trusted, backend returns an accessToken immediately (no OTP).
-    /// If device is new/untrusted, backend returns otpCode (and NO tokens).
-    func login(identifier: String, password: String, rememberMe: Bool)
-        async throws -> (
-            message: String?, user: User?, otpCode: String?, rememberMe: Bool?,
-            accessToken: String?
-        )
+    func login(email: String, password: String, tenantId: String?) async throws
+        -> (message: String?, accessToken: String?, refreshToken: String?)
 }
 
 public final class LoginService: LoginServicing {
     private let config: AuthConfiguration
     private let net: NetworkClient
+    private let tokens: TokenStore
 
-    public init(config: AuthConfiguration, net: NetworkClient) {
+    public init(
+        config: AuthConfiguration,
+        net: NetworkClient,
+        tokens: TokenStore
+    ) {
         self.config = config
         self.net = net
+        self.tokens = tokens
     }
 
-    public func login(identifier: String, password: String, rememberMe: Bool)
+    public func login(email: String, password: String, tenantId: String?)
         async throws -> (
-            message: String?, user: User?, otpCode: String?, rememberMe: Bool?,
-            accessToken: String?
+            message: String?, accessToken: String?, refreshToken: String?
         )
     {
+        var body: [String: Any] = ["email": email, "password": password]
+        if let tenantId { body["tenantId"] = tenantId }
+        
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
-            path: Endpoints.login,  // /api/auth/login
+            path: Endpoints.login,
             method: .POST,
             headers: [:],
-            body: [
-                "identifier": identifier,
-                "password": password,
-                "rememberMe": rememberMe,
-            ]
-        )  // matches your current service contract :contentReference[oaicite:4]{index=4}
-        return (
-            message: env.message,
-            user: env.user.map(Mapper.user),
-            otpCode: env.otpCode,
-            rememberMe: env.rememberMe,
-            accessToken: env.accessToken  // NEW: capture token when OTP is skipped
+            body: body
         )
+        if let access = env.accessToken {
+            try? tokens.save(
+                Tokens(accessToken: access, refreshToken: env.refreshToken)
+            )
+        }
+        return (env.message, env.accessToken, env.refreshToken)
     }
 }
