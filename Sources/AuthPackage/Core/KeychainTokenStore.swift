@@ -58,9 +58,7 @@ public final class KeychainTokenStore: TokenStore {
             return nil
         }
         let refresh = obj?["refreshToken"] as? String
-        let expiry = (obj?["expiry"] as? TimeInterval).map(
-            Date.init(timeIntervalSince1970:)
-        )
+
         return Tokens(
             accessToken: access,
             refreshToken: refresh,
