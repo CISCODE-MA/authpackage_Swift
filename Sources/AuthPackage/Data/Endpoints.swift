@@ -4,20 +4,19 @@
 //
 //  Created by Zaid MOUMNI on 08/09/2025.
 //
+import Foundation
 
 enum Endpoints {
+    // Auth
     static let login = "/api/auth/login"
-    static let verifyOTP = "/api/auth/verify-otp"
     static let logout = "/api/auth/logout"
-
-    static let register = "/api/auth/register"
-    static let verifyEmail = "/api/verify/verify-email"
-
-    static let requestPasswordReset = "/api/auth/request-password-reset"
-    static let resetPassword = "/api/auth/reset-password"
-
-    // Cookie-based refresh endpoint (HttpOnly refresh cookie)
     static let refresh = "/api/auth/refresh-token"
 
-    // removed: static let checkToken = "/api/verify/check-token"
+    // Users
+    static let registerUser = "/api/users"
+    static let inviteUser = "/api/users/invite"
+    
+    // Password Reset
+    static let requestPasswordReset = "/api/auth/forgot-password"
+    static let resetPassword = "/api/auth/reset-password"
 }
