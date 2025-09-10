@@ -19,4 +19,8 @@ enum Endpoints {
     // Password Reset
     static let requestPasswordReset = "/api/auth/forgot-password"
     static let resetPassword = "/api/auth/reset-password"
+    
+    // Microsot OAuth
+    static let microsoft = "/api/auth/microsoft"
+
 }
