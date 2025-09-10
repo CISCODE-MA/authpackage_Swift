@@ -8,7 +8,6 @@
 import Foundation
 
 // MARK: - Requests
-
 struct LoginRequest: Encodable {
     let email: String
     let password: String
@@ -19,28 +18,22 @@ struct RegisterUserRequest: Encodable {
     let email: String
     let password: String
     let name: String?
-    let tenanntId: String?
+    let tenantId: String
     let roles: [String]?
 }
 
-struct InviteserRequest: Encodable {
+struct InviteUserRequest: Encodable {
     let email: String
-    let name: String
-    let tenantId: String?
+    let name: String?
+    let tenantId: String
 }
 
-struct ForgotPasswordRequest: Encodable {
-    let email: String
-}
-
+struct ForgotPasswordRequest: Encodable { let email: String }
 struct ResetPasswordRequest: Encodable {
     let token: String
     let newPassword: String
 }
-
-struct RefreshBody: Encodable {
-    let refreshToken: String?
-}
+struct RefreshBody: Encodable { let refreshToken: String? }
 
 // MARK: - Responses
 struct UserDTO: Decodable {

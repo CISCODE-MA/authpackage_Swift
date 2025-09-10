@@ -9,7 +9,7 @@ import Foundation
 
 public protocol PasswordResetServicing {
     func requestReset(email: String)
-        async throws -> (message: String?, token: String?)
+        async throws -> String?
 
     func reset(token: String, newPassword: String)
         async throws -> String?
@@ -24,32 +24,28 @@ public final class PasswordResetService: PasswordResetServicing {
         self.net = net
     }
 
-    public func requestReset(email: String)
-        async throws -> (message: String?, token: String?)
-    {
+    public func requestReset(email: String) async throws -> String? {
+        let body: [String: Any] = ["email": email]
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
             path: Endpoints.requestPasswordReset,
             method: .POST,
             headers: [:],
-            body: ["email": email]
+            body: body
         )
-        return (message: env.message, token: env.token)
+        return env.message
     }
 
-    public func reset(token: String, newPassword: String)
-        async throws -> String?
+    public func reset(token: String, newPassword: String) async throws
+        -> String?
     {
+        let body: [String: Any] = ["token": token, "newPassword": newPassword]
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
             path: Endpoints.resetPassword,
-            method: .PATCH,
+            method: .POST,
             headers: [:],
-            body: [
-                "token": token,
-                "newPassword": newPassword,
-                "confirmNewPassword": newPassword,
-            ]
+            body: body
         )
         return env.message
     }
