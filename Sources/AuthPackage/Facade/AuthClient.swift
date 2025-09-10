@@ -5,6 +5,7 @@
 //  Created by Zaid MOUMNI on 08/09/2025.
 //
 
+import AuthenticationServices
 import Foundation
 
 public protocol AuthClientProtocol {
@@ -13,6 +14,8 @@ public protocol AuthClientProtocol {
         -> JWTClaims?
     func refreshIfNeeded() async throws -> String?
     func logout() async throws
+    func loginWithMicrosoft(from anchor: ASPresentationAnchor) async throws
+        -> User?
 
     // Users
     func register(
@@ -47,6 +50,7 @@ public final class AuthClient: AuthClientProtocol {
 
     public private(set) var currentUser: User?
     public var tokens: Tokens? { try? tokenStore.load() }
+    private let oauth: OAuthAuthenticating?
 
     public init(
         config: AuthConfiguration,
@@ -75,6 +79,10 @@ public final class AuthClient: AuthClientProtocol {
             net: networkClient,
             tokens: tokenStore
         )
+        self.oauth =
+            config.microsoftEnabled
+            ? OAuthWebAuthenticator(config: config, tokens: tokenStore) : nil
+
     }
 
     // MARK: Core
@@ -137,5 +145,16 @@ public final class AuthClient: AuthClientProtocol {
         -> String?
     {
         try await resetService.reset(token: token, newPassword: newPassword)
+    }
+
+    // MARK: Microsoft OAUTH
+    public func loginWithMicrosoft(from anchor: ASPresentationAnchor)
+        async throws -> User?
+    {
+        guard let oauth else { throw APIError.unknown }
+        // Launch web flow → store tokens locally
+        _ = try await oauth.signInWithMicrosoft(from: anchor)
+        // Optionally fetch profile using your API if you have one, or return nil for now
+        return currentUser
     }
 }
