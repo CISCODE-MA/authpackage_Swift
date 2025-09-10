@@ -47,6 +47,9 @@ public final class AuthClient: AuthClientProtocol {
     private let resetService: PasswordResetServicing
     private let tokenService: TokenServicing
 
+    private let socialService: SocialLoginServicing
+    private let oauthWeb: OAuthWebAuthenticator
+
     public private(set) var currentUser: User?
     public var accessToken: String? { (try? tokens.load())?.accessToken }
 
@@ -78,6 +81,14 @@ public final class AuthClient: AuthClientProtocol {
             net: networkClient,
             tokens: tokenStore
         )
+
+        self.socialService = SocialLoginService(
+            config: config,
+            net: networkClient,
+            tokens: tokenStore
+        )
+        self.oauthWeb = OAuthWebAuthenticator()
+
     }
 
     // MARK: Registration
@@ -129,16 +140,6 @@ public final class AuthClient: AuthClientProtocol {
         }
     }
 
-    public func verifyOTP(identifier: String, otp: String) async throws -> User
-    {
-        let (_, user, _) = try await otpService.verify(
-            identifier: identifier,
-            otp: otp
-        )
-        guard let user else { throw APIError.unknown }
-        currentUser = user
-        return user
-    }
 
     // MARK: Password Reset
     public func requestPasswordReset(email: String) async throws {
@@ -161,5 +162,30 @@ public final class AuthClient: AuthClientProtocol {
         }
         try? tokens.clear()
         currentUser = nil
+    }
+
+    // MARK: Microsoft — Built-in web OAuth
+    public func socialLoginMicrosoft() async throws -> User {
+        guard config.providers.microsoft?.enabled == true else { throw APIError.unauthorized }
+        guard config.providers.microsoft?.useBuiltInWebOAuth == true else { throw APIError.unauthorized }
+
+        // helpful fail-fast for host apps:
+        try HostAppValidation.assertURLSchemePresent(expectedScheme: config.providers.microsoft!.redirectScheme)
+
+        let cred = try await oauthWeb.authenticateMicrosoft(config: config)
+        let (_, user, _) = try await socialService.exchange(credential: cred)
+        guard let user else { throw APIError.unknown }
+        currentUser = user
+        return user
+    }
+
+    // MARK: Microsoft — BYOT (host app uses MSAL and passes an idToken)
+    public func socialLoginMicrosoft(token idToken: String) async throws -> User {
+        guard config.providers.microsoft?.enabled == true else { throw APIError.unauthorized }
+        let cred = SocialCredential(provider: .microsoft, idToken: idToken)
+        let (_, user, _) = try await socialService.exchange(credential: cred)
+        guard let user else { throw APIError.unknown }
+        currentUser = user
+        return user
     }
 }
