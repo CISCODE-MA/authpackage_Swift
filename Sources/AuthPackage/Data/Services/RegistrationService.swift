@@ -12,9 +12,10 @@ public protocol RegistrationServicing {
         email: String,
         password: String,
         name: String?,
-        tenantId: String?,
         roles: [String]?
     ) async throws -> User
+
+    // If you keep invites via /api/users/invite, leave this. Otherwise remove it.
     func inviteUser(email: String, name: String?, tenantId: String) async throws
         -> String?
 }
@@ -28,44 +29,44 @@ public final class RegistrationService: RegistrationServicing {
         self.net = net
     }
 
+    // POST /api/clients/register
     public func createUser(
         email: String,
         password: String,
         name: String?,
-        tenantId: String?,
         roles: [String]?
     ) async throws -> User {
         var body: [String: Any] = [
-            "email": email, "password": password, "tenantId": tenantId ?? "",
+            "email": email,
+            "password": password,
         ]
-        if let name { body["name"] = name }
-        if let roles { body["roles"] = roles }
+        if let name, !name.isEmpty { body["name"] = name }
+        if let roles, !roles.isEmpty { body["roles"] = roles }
 
-        let env: AuthEnvelope = try await net.send(
+        let resp: ClientRegistrationResponse = try await net.send(
             baseURL: config.baseURL,
-            path: Endpoints.registerUser,  // POST /api/users
+            path: Endpoints.registerClient,
             method: .POST,
-            headers: [:],
+            headers: ["Content-Type": "application/json"],
             body: body
         )
-        guard let dto = env.user else { throw APIError.unknown }
-        return Mapper.user(dto)
+        return Mapper.user(from: resp)
     }
 
+    // Optional legacy admin flow
     public func inviteUser(email: String, name: String?, tenantId: String)
         async throws -> String?
     {
         var body: [String: Any] = ["email": email, "tenantId": tenantId]
-        if let name { body["name"] = name }
+        if let name, !name.isEmpty { body["name"] = name }
 
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
-            path: Endpoints.inviteUser,  // POST /api/users/invite
+            path: Endpoints.inviteUser,  // keep only if you have this route
             method: .POST,
-            headers: [:],
+            headers: ["Content-Type": "application/json"],
             body: body
         )
         return env.message
     }
-
 }

@@ -57,3 +57,10 @@ struct AccessTokenEnvelope: Decodable {
     let message: String?
     let accessToken: String?
 }
+
+public struct ClientRegistrationResponse: Codable, Sendable {
+    public let id: String?
+    public let email: String
+    public let name: String?
+    public let roles: [String]?
+}

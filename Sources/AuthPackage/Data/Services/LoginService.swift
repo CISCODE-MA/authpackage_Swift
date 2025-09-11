@@ -8,7 +8,7 @@
 import Foundation
 
 public protocol LoginServicing {
-    func login(email: String, password: String, tenantId: String?) async throws
+    func login(email: String, password: String) async throws
         -> (message: String?, accessToken: String?, refreshToken: String?)
 }
 
@@ -27,19 +27,17 @@ public final class LoginService: LoginServicing {
         self.tokens = tokens
     }
 
-    public func login(email: String, password: String, tenantId: String?)
-        async throws -> (
-            message: String?, accessToken: String?, refreshToken: String?
-        )
+    public func login(email: String, password: String) async throws
+    -> (message: String?,accessToken: String?,refreshToken: String?)
     {
-        var body: [String: Any] = ["email": email, "password": password]
-        if let tenantId { body["tenantId"] = tenantId }
-        
+        let headers = ["Content-Type": "application/json"]
+        let body: [String: Any] = ["email": email, "password": password]
+
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
-            path: Endpoints.login,
+            path: Endpoints.login,  // /api/auth/clients/login
             method: .POST,
-            headers: [:],
+            headers: headers,
             body: body
         )
         if let access = env.accessToken {
