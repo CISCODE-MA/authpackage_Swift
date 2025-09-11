@@ -8,87 +8,108 @@
 import AuthenticationServices
 import Foundation
 
-/// Launches the backend's Microsoft OAuth (`/api/auth/microsoft?redirect=<scheme>://auth/callback`)
-/// and captures tokens when the app is redirected back to the custom scheme.
 @MainActor
 public final class OAuthWebAuthenticator: NSObject,
     ASWebAuthenticationPresentationContextProviding
 {
-
     private let config: AuthConfiguration
     private let tokenStore: TokenStore
-    private weak var anchorWindow: ASPresentationAnchor?
+    private weak var anchor: ASPresentationAnchor?
 
     public init(config: AuthConfiguration, tokenStore: TokenStore) {
         self.config = config
         self.tokenStore = tokenStore
-        super.init()
     }
 
-    // ASWebAuthenticationPresentationContextProviding
-    public func presentationAnchor(for session: ASWebAuthenticationSession)
-        -> ASPresentationAnchor
-    {
-        anchorWindow ?? ASPresentationAnchor()
-    }
-
-    /// Starts the OAuth flow and returns the resulting tokens.
+    // MARK: - Microsoft via backend → deep link back to app
     public func signInMicrosoft(from anchor: ASPresentationAnchor) async throws
         -> Tokens
     {
-        self.anchorWindow = anchor
-        guard let scheme = config.redirectScheme else {
+        guard let scheme = config.redirectScheme, !scheme.isEmpty else {
             throw APIError.invalidURL
         }
+        self.anchor = anchor
 
-        // Compose start URL: GET /api/auth/microsoft?redirect=<scheme>://auth/callback
+        // Build start URL:  http(s)://<base>/api/auth/microsoft?redirect=<scheme>://auth/callback
         var comps = URLComponents(
             url: config.baseURL,
             resolvingAgainstBaseURL: false
-        )!
-        comps.path = Endpoints.microsoft
-        comps.queryItems = [
+        )
+        comps?.path = Endpoints.microsoft
+        comps?.queryItems = [
             URLQueryItem(name: "redirect", value: "\(scheme)://auth/callback")
         ]
-        guard let startURL = comps.url else { throw APIError.invalidURL }
+        guard let startURL = comps?.url else {
+            throw APIError.invalidURL
+        }
 
-        return try await withCheckedThrowingContinuation { [weak self] cont in
+        print("[OAuth] startURL =", startURL.absoluteString)
+
+        return try await withCheckedThrowingContinuation {
+            [weak self] (cont: CheckedContinuation<Tokens, Error>) in
+            guard let self = self else {
+                return cont.resume(throwing: APIError.unknown)
+            }
+
             let session = ASWebAuthenticationSession(
                 url: startURL,
                 callbackURLScheme: scheme
-            ) { url, err in
-                guard err == nil, let url = url,
-                    let items = URLComponents(
+            ) { callbackURL, error in
+                // Debug: see exactly what we got
+                print(
+                    "[OAuth] completion url =",
+                    callbackURL?.absoluteString ?? "nil"
+                )
+                print("[OAuth] completion err =", String(describing: error))
+
+                if let err = error as? ASWebAuthenticationSessionError,
+                    err.code == .canceledLogin
+                {
+                    return cont.resume(throwing: APIError.unknown)
+                }
+                guard let url = callbackURL else {
+                    return cont.resume(throwing: APIError.unknown)
+                }
+
+                // Expect: authdemo://auth/callback?accessToken=...&refreshToken=...
+                guard
+                    let qi = URLComponents(
                         url: url,
                         resolvingAgainstBaseURL: false
                     )?.queryItems
                 else {
                     return cont.resume(throwing: APIError.unknown)
                 }
+                let access = qi.first(where: { $0.name == "accessToken" })?
+                    .value
+                let refresh = qi.first(where: { $0.name == "refreshToken" })?
+                    .value
 
-                let dict = Dictionary(
-                    uniqueKeysWithValues: items.map {
-                        ($0.name, $0.value ?? "")
-                    }
-                )
-                let access = dict["accessToken"] ?? ""
-                let refresh = dict["refreshToken"]
-
-                guard !access.isEmpty else {
+                guard let accessToken = access, !accessToken.isEmpty else {
                     return cont.resume(throwing: APIError.unauthorized)
                 }
-
-                let tokens = Tokens(accessToken: access, refreshToken: refresh)
-                do {
-                    try self?.tokenStore.save(tokens)
-                    cont.resume(returning: tokens)
-                } catch {
-                    cont.resume(throwing: error)
-                }
+                let tokens = Tokens(
+                    accessToken: accessToken,
+                    refreshToken: refresh
+                )
+                do { try self.tokenStore.save(tokens) } catch
+                { /* ignore save errors */  }
+                cont.resume(returning: tokens)
             }
-            session.prefersEphemeralWebBrowserSession = true
+
             session.presentationContextProvider = self
-            _ = session.start()
+            session.prefersEphemeralWebBrowserSession = false
+//            if #available(iOS 13.4, *) {
+//                session.canStart()  // no-op, but keeps analyzer happy
+//            }
+            session.start()
         }
+    }
+
+    // Anchor for ASWebAuthenticationSession
+    public func presentationAnchor(for session: ASWebAuthenticationSession)
+        -> ASPresentationAnchor
+    {
+        anchor ?? ASPresentationAnchor()
     }
 }
