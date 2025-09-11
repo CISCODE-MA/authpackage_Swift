@@ -8,32 +8,48 @@
 import AuthenticationServices
 import Foundation
 
-public protocol OAuthAuthenticating: AnyObject {
-    func signInWithMicrosoft(from anchor: ASPresentationAnchor) async throws -> Tokens
-}
+/// Launches the backend's Microsoft OAuth (`/api/auth/microsoft?redirect=<scheme>://auth/callback`)
+/// and captures tokens when the app is redirected back to the custom scheme.
+@MainActor
+public final class OAuthWebAuthenticator: NSObject,
+    ASWebAuthenticationPresentationContextProviding
+{
 
-public final class OAuthWebAuthenticator: NSObject, OAuthAuthenticating, ASWebAuthenticationPresentationContextProviding {
     private let config: AuthConfiguration
-    private let tokens: TokenStore
+    private let tokenStore: TokenStore
+    private weak var anchorWindow: ASPresentationAnchor?
 
-    public init(config: AuthConfiguration, tokens: TokenStore) {
+    public init(config: AuthConfiguration, tokenStore: TokenStore) {
         self.config = config
-        self.tokens = tokens
+        self.tokenStore = tokenStore
         super.init()
     }
 
-    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { ASPresentationAnchor() }
+    // ASWebAuthenticationPresentationContextProviding
+    public func presentationAnchor(for session: ASWebAuthenticationSession)
+        -> ASPresentationAnchor
+    {
+        anchorWindow ?? ASPresentationAnchor()
+    }
 
-    public func signInWithMicrosoft(from anchor: ASPresentationAnchor) async throws -> Tokens {
-        guard let scheme = config.redirectScheme else { throw APIError.invalidURL }
+    /// Starts the OAuth flow and returns the resulting tokens.
+    public func signInMicrosoft(from anchor: ASPresentationAnchor) async throws
+        -> Tokens
+    {
+        self.anchorWindow = anchor
+        guard let scheme = config.redirectScheme else {
+            throw APIError.invalidURL
+        }
 
-        // e.g. myapp://auth/callback
-        let callback = "\(scheme)://auth/callback"
-
-        // Ask backend to start Microsoft OAuth and redirect back to our app scheme
-        var comps = URLComponents(url: config.baseURL, resolvingAgainstBaseURL: false)!
+        // Compose start URL: GET /api/auth/microsoft?redirect=<scheme>://auth/callback
+        var comps = URLComponents(
+            url: config.baseURL,
+            resolvingAgainstBaseURL: false
+        )!
         comps.path = Endpoints.microsoft
-        comps.queryItems = [URLQueryItem(name: "redirect", value: callback)]
+        comps.queryItems = [
+            URLQueryItem(name: "redirect", value: "\(scheme)://auth/callback")
+        ]
         guard let startURL = comps.url else { throw APIError.invalidURL }
 
         return try await withCheckedThrowingContinuation { [weak self] cont in
@@ -41,16 +57,31 @@ public final class OAuthWebAuthenticator: NSObject, OAuthAuthenticating, ASWebAu
                 url: startURL,
                 callbackURLScheme: scheme
             ) { url, err in
-                guard err == nil, let url = url else { return cont.resume(throwing: APIError.unknown) }
+                guard err == nil, let url = url,
+                    let items = URLComponents(
+                        url: url,
+                        resolvingAgainstBaseURL: false
+                    )?.queryItems
+                else {
+                    return cont.resume(throwing: APIError.unknown)
+                }
+
+                let dict = Dictionary(
+                    uniqueKeysWithValues: items.map {
+                        ($0.name, $0.value ?? "")
+                    }
+                )
+                let access = dict["accessToken"] ?? ""
+                let refresh = dict["refreshToken"]
+
+                guard !access.isEmpty else {
+                    return cont.resume(throwing: APIError.unauthorized)
+                }
+
+                let tokens = Tokens(accessToken: access, refreshToken: refresh)
                 do {
-                    // Expect: myapp://auth/callback?accessToken=...&refreshToken=...
-                    let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                    let q = comps?.queryItems ?? []
-                    let access = q.first { $0.name == "accessToken" }?.value ?? ""
-                    let refresh = q.first { $0.name == "refreshToken" }?.value
-                    let t = Tokens(accessToken: access, refreshToken: refresh, expiry: nil)
-                    try self?.tokens.save(t)
-                    cont.resume(returning: t)
+                    try self?.tokenStore.save(tokens)
+                    cont.resume(returning: tokens)
                 } catch {
                     cont.resume(throwing: error)
                 }
