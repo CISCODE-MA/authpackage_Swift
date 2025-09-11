@@ -14,8 +14,6 @@ public protocol AuthClientProtocol {
         -> JWTClaims?
     func refreshIfNeeded() async throws -> String?
     func logout() async throws
-    func loginWithMicrosoft(from anchor: ASPresentationAnchor) async throws
-        -> User?
 
     // Users
     func register(
@@ -33,24 +31,32 @@ public protocol AuthClientProtocol {
     func resetPassword(token: String, newPassword: String) async throws
         -> String?
 
+    // OAuth (Microsoft through backend)
+    @MainActor
+    func loginWithMicrosoft(from anchor: ASPresentationAnchor) async throws
+        -> JWTClaims?
+
     // State
     var currentUser: User? { get }
     var tokens: Tokens? { get }
 }
 
 public final class AuthClient: AuthClientProtocol {
+
+    // MARK: - Deps
     private let config: AuthConfiguration
     private let net: NetworkClient
     private let tokenStore: TokenStore
 
+    // Services
     private let loginService: LoginServicing
     private let regService: RegistrationServicing
     private let resetService: PasswordResetServicing
     private let tokenService: TokenServicing
 
+    // MARK: - State
     public private(set) var currentUser: User?
     public var tokens: Tokens? { try? tokenStore.load() }
-    private let oauth: OAuthAuthenticating?
 
     public init(
         config: AuthConfiguration,
@@ -79,13 +85,9 @@ public final class AuthClient: AuthClientProtocol {
             net: networkClient,
             tokens: tokenStore
         )
-        self.oauth =
-            config.microsoftEnabled
-            ? OAuthWebAuthenticator(config: config, tokens: tokenStore) : nil
-
     }
 
-    // MARK: Core
+    // MARK: - Core
     public func login(email: String, password: String, tenantId: String?)
         async throws -> JWTClaims?
     {
@@ -94,7 +96,7 @@ public final class AuthClient: AuthClientProtocol {
             password: password,
             tenantId: tenantId
         )
-        guard let access = result.accessToken ?? result.1 else {
+        guard let access = result.accessToken else {
             throw APIError.unauthorized
         }
         return JWTDecoder.decode(access)
@@ -109,7 +111,7 @@ public final class AuthClient: AuthClientProtocol {
         currentUser = nil
     }
 
-    // MARK: Users
+    // MARK: - Users
     public func register(
         email: String,
         password: String,
@@ -131,12 +133,12 @@ public final class AuthClient: AuthClientProtocol {
     {
         try await regService.inviteUser(
             email: email,
-            name: name ?? "",
+            name: name,
             tenantId: tenantId
         )
     }
 
-    // MARK: Password reset
+    // MARK: - Password reset
     public func requestPasswordReset(email: String) async throws -> String? {
         try await resetService.requestReset(email: email)
     }
@@ -147,14 +149,17 @@ public final class AuthClient: AuthClientProtocol {
         try await resetService.reset(token: token, newPassword: newPassword)
     }
 
-    // MARK: Microsoft OAUTH
+    // MARK: - OAuth (Microsoft via backend redirect → app scheme)
+    @MainActor
     public func loginWithMicrosoft(from anchor: ASPresentationAnchor)
-        async throws -> User?
+        async throws -> JWTClaims?
     {
-        guard let oauth else { throw APIError.unknown }
-        // Launch web flow → store tokens locally
-        _ = try await oauth.signInWithMicrosoft(from: anchor)
-        // Optionally fetch profile using your API if you have one, or return nil for now
-        return currentUser
+        guard config.microsoftEnabled else { throw APIError.unknown }
+        let oauth = OAuthWebAuthenticator(
+            config: config,
+            tokenStore: tokenStore
+        )
+        let t = try await oauth.signInMicrosoft(from: anchor)  // runs on main actor
+        return JWTDecoder.decode(t.accessToken)
     }
 }
