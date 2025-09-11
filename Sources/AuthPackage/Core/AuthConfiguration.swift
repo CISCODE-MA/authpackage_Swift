@@ -41,6 +41,7 @@ public struct MicrosoftConfig: Sendable {
     public let scopes: [String]
     /// true = built-in web OAuth; false = BYOT (host app passes an MSAL token)
     public let useBuiltInWebOAuth: Bool
+    public let microsoftEnabled: Bool
 
     public init(
         enabled: Bool = true,
@@ -49,7 +50,9 @@ public struct MicrosoftConfig: Sendable {
         redirectScheme: String,
         redirectURI: String,
         scopes: [String] = ["openid", "email", "profile", "offline_access"],
-        useBuiltInWebOAuth: Bool = true
+        useBuiltInWebOAuth: Bool = true,
+        microsoftEnabled: Bool = true
+
     ) {
         self.enabled = enabled
         self.tenant = tenant
@@ -58,5 +61,6 @@ public struct MicrosoftConfig: Sendable {
         self.redirectURI = redirectURI
         self.scopes = scopes
         self.useBuiltInWebOAuth = useBuiltInWebOAuth
+        self.microsoftEnabled = microsoftEnabled
     }
 }
