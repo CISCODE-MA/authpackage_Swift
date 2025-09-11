@@ -29,8 +29,7 @@ public final class TokenService: TokenServicing {
 
     public func refresh(refreshToken: String? = nil) async throws -> String? {
         let supplied = refreshToken ?? (try? tokens.load())?.refreshToken
-        let body: [String: Any]? = supplied.map { ["refreshToken": $0] }  // nil = cookie-mode
-
+        let body: [String: Any]? = supplied.map { ["refreshToken": $0] }  // nil -> cookie path
         let env: AccessTokenEnvelope = try await net.send(
             baseURL: config.baseURL,
             path: Endpoints.refresh,
