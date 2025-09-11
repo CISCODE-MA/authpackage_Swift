@@ -10,24 +10,21 @@ import Foundation
 public struct AuthConfiguration: Sendable {
     public let baseURL: URL
     public let refreshUsesCookie: Bool
-    public let providers: ProvidersConfig  // NEW
+    /// Custom URL scheme (or universal link domain) your host app handles, e.g. "authdemo"
+    public let redirectScheme: String?
+    /// Feature flags
+    public let microsoftEnabled: Bool
 
     public init(
         baseURL: URL,
         refreshUsesCookie: Bool = true,
-        providers: ProvidersConfig = .disabled
+        redirectScheme: String? = nil,
+        microsoftEnabled: Bool = false
     ) {
         self.baseURL = baseURL
         self.refreshUsesCookie = refreshUsesCookie
-        self.providers = providers
-    }
-}
-
-public struct ProvidersConfig: Sendable {
-    public var microsoft: MicrosoftConfig?
-    public static var disabled: ProvidersConfig { .init(microsoft: nil) }
-    public init(microsoft: MicrosoftConfig? = nil) {
-        self.microsoft = microsoft
+        self.redirectScheme = redirectScheme
+        self.microsoftEnabled = microsoftEnabled
     }
 }
 
@@ -44,6 +41,7 @@ public struct MicrosoftConfig: Sendable {
     public let scopes: [String]
     /// true = built-in web OAuth; false = BYOT (host app passes an MSAL token)
     public let useBuiltInWebOAuth: Bool
+    public let microsoftEnabled: Bool
 
     public init(
         enabled: Bool = true,
@@ -52,7 +50,9 @@ public struct MicrosoftConfig: Sendable {
         redirectScheme: String,
         redirectURI: String,
         scopes: [String] = ["openid", "email", "profile", "offline_access"],
-        useBuiltInWebOAuth: Bool = true
+        useBuiltInWebOAuth: Bool = true,
+        microsoftEnabled: Bool = true
+
     ) {
         self.enabled = enabled
         self.tenant = tenant
@@ -61,5 +61,6 @@ public struct MicrosoftConfig: Sendable {
         self.redirectURI = redirectURI
         self.scopes = scopes
         self.useBuiltInWebOAuth = useBuiltInWebOAuth
+        self.microsoftEnabled = microsoftEnabled
     }
 }

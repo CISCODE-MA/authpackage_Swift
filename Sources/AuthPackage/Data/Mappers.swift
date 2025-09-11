@@ -7,6 +7,8 @@
 
 import Foundation
 
+// Sources/AuthPackage/Data/Mappers.swift
+
 enum Mapper {
     static func user(_ dto: UserDTO) -> User {
         let id = dto.id ?? dto._id ?? UUID().uuidString
@@ -17,6 +19,17 @@ enum Mapper {
             tenantId: dto.tenantId,
             roles: dto.roles ?? [],
             permissions: dto.permissions ?? []
+        )
+    }
+
+    static func user(from client: ClientRegistrationResponse) -> User {
+        return User(
+            id: client.id ?? UUID().uuidString,
+            email: client.email,
+            name: client.name,
+            tenantId: nil,
+            roles: client.roles ?? [],
+            permissions: []  // permissions aren’t returned on register
         )
     }
 }

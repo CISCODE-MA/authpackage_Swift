@@ -5,80 +5,56 @@
 //  Created by Zaid MOUMNI on 10/09/2025.
 //
 
-//import AuthenticationServices
-//import Foundation
-//
-//actor OAuthWebAuthenticator: NSObject {
-//    func authenticateMicrosoft(config: AuthConfiguration) async throws
-//        -> SocialCredential
-//    {
-//        guard let ms = config.providers.microsoft, ms.enabled else {
-//            throw APIError.unauthorized
-//        }
-//        // Build backend authorize URL; backend will talk to Microsoft securely.
-//        var comps = URLComponents(
-//            url: config.baseURL,
-//            resolvingAgainstBaseURL: false
-//        )!
-//        comps.path = Endpoints.oauthAuthorize
-//        comps.queryItems = [
-//            .init(name: "provider", value: "microsoft"),
-//            .init(name: "tenant", value: ms.tenant),
-//            .init(name: "redirect_uri", value: ms.redirectURI),
-//            .init(name: "client_id", value: ms.clientID),
-//        ]
-//        guard let url = comps.url else { throw APIError.invalidURL }
-//
-//        let callbackScheme = ms.redirectScheme
-//
-//        return try await withCheckedThrowingContinuation { cont in
-//            let session = ASWebAuthenticationSession(
-//                url: url,
-//                callbackURLScheme: callbackScheme
-//            ) { callbackURL, error in
-//                if let error {
-//                    return cont.resume(
-//                        throwing: APIError.network(String(describing: error))
-//                    )
-//                }
-//                guard let callbackURL else {
-//                    return cont.resume(throwing: APIError.unknown)
-//                }
-//
-//                let parts = URLComponents(
-//                    url: callbackURL,
-//                    resolvingAgainstBaseURL: false
-//                )
-//                let idToken = parts?.queryItems?.first(where: {
-//                    $0.name == "id_token"
-//                })?.value
-//                let accessToken = parts?.queryItems?.first(where: {
-//                    $0.name == "access_token"
-//                })?.value
-//                if idToken == nil && accessToken == nil {
-//                    return cont.resume(throwing: APIError.unauthorized)
-//                }
-//
-//                cont.resume(
-//                    returning: SocialCredential(
-//                        provider: .microsoft,
-//                        idToken: idToken,
-//                        accessToken: accessToken
-//                    )
-//                )
-//            }
-//            session.prefersEphemeralWebBrowserSession = true
-//            session.presentationContextProvider = self
-//            _ = session.start()
-//        }
-//    }
-//}
-//
-//extension OAuthWebAuthenticator: ASWebAuthenticationPresentationContextProviding
-//{
-//    nonisolated func presentationAnchor(for session: ASWebAuthenticationSession)
-//        -> ASPresentationAnchor
-//    {
-//        ASPresentationAnchor()
-//    }
-//}
+import AuthenticationServices
+import Foundation
+
+@MainActor
+public final class OAuthWebAuthenticator: NSObject, ASWebAuthenticationPresentationContextProviding {
+    private let config: AuthConfiguration
+    private let tokenStore: TokenStore
+    private weak var anchor: ASPresentationAnchor?
+
+    public init(config: AuthConfiguration, tokenStore: TokenStore) {
+        self.config = config
+        self.tokenStore = tokenStore
+    }
+
+    public func signInMicrosoft(from anchor: ASPresentationAnchor) async throws -> Tokens {
+        guard let scheme = config.redirectScheme, !scheme.isEmpty else { throw APIError.invalidURL }
+        self.anchor = anchor
+
+        var comps = URLComponents(url: config.baseURL, resolvingAgainstBaseURL: false)
+        comps?.path = Endpoints.microsoft
+        comps?.queryItems = [URLQueryItem(name: "redirect", value: "\(scheme)://auth/callback")]
+        guard let startURL = comps?.url else { throw APIError.invalidURL }
+
+        return try await withCheckedThrowingContinuation { [weak self] (cont: CheckedContinuation<Tokens, Error>) in
+            guard let self = self else { return cont.resume(throwing: APIError.unknown) }
+
+            let session = ASWebAuthenticationSession(url: startURL, callbackURLScheme: scheme) { url, err in
+                if let err = err as? ASWebAuthenticationSessionError, err.code == .canceledLogin {
+                    return cont.resume(throwing: APIError.unknown)
+                }
+                guard let url = url,
+                      let qi = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+                      let access = qi.first(where: { $0.name == "accessToken" })?.value,
+                      !access.isEmpty else {
+                    return cont.resume(throwing: APIError.unauthorized)
+                }
+
+                let refresh = qi.first(where: { $0.name == "refreshToken" })?.value
+                let tokens = Tokens(accessToken: access, refreshToken: refresh)
+                do { try self.tokenStore.save(tokens) } catch { /* ignore */ }
+                cont.resume(returning: tokens)
+            }
+
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            session.start()
+        }
+    }
+
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        anchor ?? ASPresentationAnchor()
+    }
+}
