@@ -10,8 +10,7 @@ import Foundation
 
 public protocol AuthClientProtocol {
     // Core
-    func login(email: String, password: String, tenantId: String?) async throws
-        -> JWTClaims?
+    func login(email: String, password: String) async throws -> JWTClaims?
     func refreshIfNeeded() async throws -> String?
     func logout() async throws
 
@@ -20,11 +19,8 @@ public protocol AuthClientProtocol {
         email: String,
         password: String,
         name: String?,
-        tenantId: String,
         roles: [String]?
     ) async throws -> User
-    func invite(email: String, name: String?, tenantId: String) async throws
-        -> String?
 
     // Password reset
     func requestPasswordReset(email: String) async throws -> String?
@@ -88,18 +84,27 @@ public final class AuthClient: AuthClientProtocol {
     }
 
     // MARK: - Core
-    public func login(email: String, password: String, tenantId: String?)
-        async throws -> JWTClaims?
+    public func login(email: String, password: String) async throws
+        -> JWTClaims?
     {
         let result = try await loginService.login(
             email: email,
-            password: password,
-            tenantId: tenantId
+            password: password
         )
         guard let access = result.accessToken else {
             throw APIError.unauthorized
         }
         return JWTDecoder.decode(access)
+            ?? JWTClaims(
+                sub: nil,
+                email: nil,
+                tenantId: nil,
+                roles: nil,
+                permissions: nil,
+                exp: nil,
+                iat: nil,
+                raw: nil
+            )
     }
 
     public func refreshIfNeeded() async throws -> String? {
@@ -116,25 +121,13 @@ public final class AuthClient: AuthClientProtocol {
         email: String,
         password: String,
         name: String?,
-        tenantId: String,
         roles: [String]? = nil
     ) async throws -> User {
         try await regService.createUser(
             email: email,
             password: password,
             name: name,
-            tenantId: tenantId,
             roles: roles
-        )
-    }
-
-    public func invite(email: String, name: String?, tenantId: String)
-        async throws -> String?
-    {
-        try await regService.inviteUser(
-            email: email,
-            name: name,
-            tenantId: tenantId
         )
     }
 
