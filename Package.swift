@@ -21,11 +21,13 @@ let package = Package(
 
         .testTarget(
             name: "AuthPackageTests",
-            dependencies: ["AuthPackage"]
+            dependencies: ["AuthPackage"],
+            path: "Tests/AuthPackageTests"
         ),
-        .testTarget(
-            name: "AuthPackageLiveTests",
-            dependencies: ["AuthPackage"]
-        ),
+       .testTarget(
+           name: "AuthPackageLiveTests",
+           dependencies: ["AuthPackage"]
+           
+       ),
     ]
 )
