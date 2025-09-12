@@ -5,13 +5,14 @@
 //  Created by Zaid MOUMNI on 12/09/2025.
 //
 
-
 import SwiftUI
 
 public struct RegistrationView: View {
     @Environment(\.authUIStyle) private var style
     @ObservedObject private var vm: AuthViewModel
     @Environment(\.dismiss) private var dismiss
+
+    @State private var showErrorAlert = false
 
     public init(vm: AuthViewModel) {
         self._vm = ObservedObject(initialValue: vm)
@@ -36,8 +37,13 @@ public struct RegistrationView: View {
             Section {
                 Button {
                     Task {
-                        await vm.register()
-                        if vm.isAuthenticated { dismiss() }
+                        let ok = await vm.register()
+                        if ok {
+                            // success -> back to Login (fields already cleared)
+                            dismiss()
+                        } else {
+                            showErrorAlert = true
+                        }
                     }
                 } label: {
                     HStack {
@@ -45,17 +51,18 @@ public struct RegistrationView: View {
                         Text("Create Account")
                     }
                 }
-                .disabled(vm.registerEmail.isEmpty || vm.registerPassword.isEmpty || vm.isLoading)
-            }
-
-            if let error = vm.errorMessage, !error.isEmpty {
-                Section(footer: Text(error).foregroundStyle(.red)) { EmptyView() }
+                .disabled(
+                    vm.registerEmail.isEmpty || vm.registerPassword.isEmpty
+                        || vm.isLoading
+                )
             }
         }
         .navigationTitle("Sign Up")
-        
-        NavigationLink(destination: LoginView(vm: vm)) {
-            Text("Already have an account? Sign back in")
+        .tint(style.colors.primary)
+        .alert("Sign up failed", isPresented: $showErrorAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(vm.errorMessage ?? "Something went wrong. Please try again.")
         }
     }
 }
