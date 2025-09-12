@@ -8,9 +8,9 @@
 import SwiftUI
 
 public struct AuthFlowView: View {
+    @StateObject private var vm = AuthViewModel()
     @EnvironmentObject private var router: AuthUIRouter
     @Environment(\.authUIStyle) private var style
-    @StateObject private var vm = AuthViewModel()
 
     public init() {}
 
@@ -21,11 +21,9 @@ public struct AuthFlowView: View {
                 if vm.isAuthenticated {
                     PostLoginView(onLogout: { Task { await vm.logout() } })
                 } else if let token = router.pendingResetToken {
-                    PasswordResetConfirmView(token: token) {
-                        router.pendingResetToken = nil
-                    }
+                    PasswordResetConfirmView(token: token) { router.pendingResetToken = nil }
                 } else {
-                    LoginView()
+                    LoginView(vm: vm) // <-- pass the SAME vm down
                 }
             }
             .padding()
