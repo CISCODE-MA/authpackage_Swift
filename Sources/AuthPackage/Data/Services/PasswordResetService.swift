@@ -8,7 +8,7 @@
 import Foundation
 
 public protocol PasswordResetServicing {
-    func requestReset(email: String)
+    func requestReset(email: String, type: String)
         async throws -> String?
 
     func reset(token: String, newPassword: String)
@@ -24,8 +24,8 @@ public final class PasswordResetService: PasswordResetServicing {
         self.net = net
     }
 
-    public func requestReset(email: String) async throws -> String? {
-        let body: [String: Any] = ["email": email]
+    public func requestReset(email: String, type: String = "client") async throws -> String? {
+        let body: [String: Any] = ["email": email, "type": type]
         let env: AuthEnvelope = try await net.send(
             baseURL: config.baseURL,
             path: Endpoints.requestPasswordReset,
