@@ -38,10 +38,17 @@ private actor AuthWorker {
         try await clientBox.value.logout()
     }
 
-    func register(email: String, password: String, name: String?) async throws -> User {
-        try await clientBox.value.register(email: email, password: password, name: name, roles: nil)
+    func register(email: String, password: String, name: String?) async throws
+        -> User
+    {
+        try await clientBox.value.register(
+            email: email,
+            password: password,
+            name: name,
+            roles: nil
+        )
     }
-    
+
     // PASSWORD RESET
     func requestPasswordReset(email: String) async throws -> String? {
         try await clientBox.value.requestPasswordReset(email: email)
@@ -77,15 +84,13 @@ public final class AuthViewModel: ObservableObject {
 
     @Published public var resetEmail: String = ""
     @Published public var resetNewPassword: String = ""
-    
+
+    // ✅ ADD: registration fields
     @Published public var registerEmail: String = ""
     @Published public var registerPassword: String = ""
     @Published public var registerName: String = ""
 
-
-    // Routing/config
     private let router: AuthUIRouter
-    // Concurrency-safe worker that owns the client
     private let worker: AuthWorker
 
     public init(router: AuthUIRouter = .shared) {
@@ -96,74 +101,102 @@ public final class AuthViewModel: ObservableObject {
         refreshAuthState()
     }
 
+    // Helper: clear all input fields + error
+    private func clearAllForms() {
+        email = ""
+        password = ""
+        resetEmail = ""
+        resetNewPassword = ""
+        registerEmail = ""
+        registerPassword = ""
+        registerName = ""
+        errorMessage = nil
+    }
+
     public func refreshAuthState() {
         Task { [weak self] in
             let authed = await self?.worker.hasAccessToken() ?? false
             await MainActor.run { self?.isAuthenticated = authed }
         }
     }
-    
-    public func register() async {
-        errorMessage = nil
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            _ = try await worker.register(
-                email: registerEmail.trimmingCharacters(in: .whitespacesAndNewlines),
-                password: registerPassword,
-                name: registerName.isEmpty ? nil : registerName
-            )
-            // No auto-login: the hosting view should navigate back to Login.
-        } catch {
-            errorMessage = (error as NSError).localizedDescription
-        }
-    }
 
+    // MARK: Login
     public func login() async {
         errorMessage = nil
         isLoading = true
         defer { isLoading = false }
         do {
-            print("[AuthUI] Calling core login(email:\(email))")
             _ = try await worker.login(
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password
             )
-            print("[AuthUI] Core login returned OK")
-            // Flip immediately so the parent view transitions now.
+            // ✅ flip immediately and clear credentials
             self.isAuthenticated = true
-            // Still reconcile with the actual token store.
+            self.email = ""
+            self.password = ""
             refreshAuthState()
         } catch {
-            let msg = (error as NSError).localizedDescription
-            print("[AuthUI] Core login threw: \(msg)")
-            errorMessage = msg
+            errorMessage = userMessage(for: error)
         }
     }
 
+    // MARK: Logout
     public func logout() async {
-        // Optimistic flip: go back to login right away
+        // ✅ optimistic UI flip + clear fields/errors FIRST
         self.isAuthenticated = false
+        clearAllForms()
 
         isLoading = true
         defer { isLoading = false }
         do {
-            try await worker.logout()
-            // Re-check in case the core/store already cleared/persisted differently
+            try await worker.logout()  // server logout + token clear (core) :contentReference[oaicite:1]{index=1}
+            // ✅ ensure we stay logged out
             refreshAuthState()
         } catch {
-            errorMessage = (error as NSError).localizedDescription
+            // ✅ swallow server noise here (401/expired session etc.) and do NOT show on login screen
+            // If you want to surface it for debugging, log it instead of setting errorMessage.
+            // print("Logout error: \(error)")
         }
     }
 
+    // MARK: Registration (returns success Bool; no auto-login)
+    public func register() async -> Bool {
+        errorMessage = nil
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            // add this method in AuthWorker if you don't have it yet:
+            // func register(email: String, password: String, name: String?) async throws -> User
+            _ = try await worker.register(
+                email: registerEmail.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ),
+                password: registerPassword,
+                name: registerName.isEmpty ? nil : registerName
+            )
+            // ✅ on success: clear registration fields and return to Login
+            registerEmail = ""
+            registerPassword = ""
+            registerName = ""
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = userMessage(for: error)
+            return false
+        }
+    }
+
+    // MARK: Forgot / Reset
     public func requestPasswordReset() async {
         errorMessage = nil
         isLoading = true
         defer { isLoading = false }
         do {
             _ = try await worker.requestPasswordReset(email: resetEmail)
+            // optional: clear the field on success
+            resetEmail = ""
         } catch {
-            errorMessage = (error as NSError).localizedDescription
+            errorMessage = userMessage(for: error)
         }
     }
 
@@ -176,8 +209,10 @@ public final class AuthViewModel: ObservableObject {
                 token: token,
                 newPassword: resetNewPassword
             )
+            // optional: clear field on success
+            resetNewPassword = ""
         } catch {
-            errorMessage = (error as NSError).localizedDescription
+            errorMessage = userMessage(for: error)
         }
     }
 
@@ -188,9 +223,25 @@ public final class AuthViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             _ = try await worker.loginWithMicrosoft(from: anchor)
+            self.isAuthenticated = true
             refreshAuthState()
         } catch {
-            errorMessage = (error as NSError).localizedDescription
+            errorMessage = userMessage(for: error)
         }
+    }
+
+    // MARK: Friendly error mapping (instead of "The operation couldn’t be completed...")
+    private func userMessage(for error: Error) -> String {
+        if let api = error as? APIError {
+            switch api {
+            case .unauthorized: return "Invalid email or password."
+            case .notFound: return "Account not found."
+            case .badRequest(let msg):
+                return msg.isEmpty ? "Invalid request." : msg
+            case .network: return "Network error. Check your connection."
+            default: return "Something went wrong. Please try again."
+            }
+        }
+        return (error as NSError).localizedDescription
     }
 }
