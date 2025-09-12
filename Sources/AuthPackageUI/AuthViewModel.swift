@@ -52,8 +52,8 @@ private actor AuthWorker {
     }
 
     // PASSWORD RESET
-    func requestPasswordReset(email: String) async throws -> String? {
-        try await clientBox.value.requestPasswordReset(email: email)
+    func requestPasswordReset(email: String, type: String) async throws -> String? {
+        try await clientBox.value.requestPasswordReset(email: email, type: type)
     }
 
     func resetPassword(token: String, newPassword: String) async throws
@@ -200,7 +200,7 @@ public final class AuthViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            _ = try await worker.requestPasswordReset(email: resetEmail)
+            _ = try await worker.requestPasswordReset(email: resetEmail, type: "client")
             resetEmail = ""
         } catch {
             errorMessage = userMessage(for: error)
