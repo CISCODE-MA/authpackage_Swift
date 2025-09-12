@@ -5,6 +5,9 @@
 //  Created by Zaid MOUMNI on 12/09/2025.
 //
 
+import SwiftUI
+import Foundation
+
 public struct LoginView: View {
     @Environment(\.authUIStyle) private var style
     @StateObject private var vm = AuthViewModel()
