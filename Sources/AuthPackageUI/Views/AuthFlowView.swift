@@ -19,11 +19,11 @@ public struct AuthFlowView: View {
             style.colors.background.ignoresSafeArea()
             Group {
                 if vm.isAuthenticated {
-                    PostLoginView(onLogout: { Task { await vm.logout() } })
+                    PostLoginView(vm: vm, onLogout: { Task { await vm.logout() } })
                 } else if let token = router.pendingResetToken {
                     PasswordResetConfirmView(token: token) { router.pendingResetToken = nil }
                 } else {
-                    LoginView(vm: vm) // <-- pass the SAME vm down
+                    LoginView(vm: vm)
                 }
             }
             .padding()
