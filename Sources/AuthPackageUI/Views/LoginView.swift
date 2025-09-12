@@ -69,7 +69,8 @@ public struct LoginView: View {
                             if let anchor {
                                 await vm.loginWithMicrosoft(anchor: anchor)
                             } else {
-                                vm.errorMessage = "Unable to present Microsoft sign-in (no window anchor)."
+                                vm.errorMessage =
+                                    "Unable to present Microsoft sign-in (no window anchor)."
                                 showErrorAlert = true
                             }
                         }
@@ -90,6 +91,14 @@ public struct LoginView: View {
             if let error = vm.errorMessage, !error.isEmpty {
                 Text(error).foregroundColor(.red).font(.footnote)
             }
+
+            NavigationLink(destination: PasswordResetRequestView()) {
+                Text("Forgot password?")
+            }
+
+            NavigationLink(destination: RegistrationView(vm: vm)) {
+                Text("Don’t have an account? Create one")
+            }
         }
         .foregroundStyle(style.colors.text)
         .navigationTitle("")
@@ -100,11 +109,12 @@ public struct LoginView: View {
         } message: {
             Text(vm.errorMessage ?? "Unknown error")
         }
+
     }
 }
 
 #if canImport(UIKit)
-@MainActor
+    @MainActor
 
     // Finds a good presentation anchor if our local capture fails.
     private func keyWindow() -> ASPresentationAnchor? {

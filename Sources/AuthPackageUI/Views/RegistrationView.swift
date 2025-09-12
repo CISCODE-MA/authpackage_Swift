@@ -1,3 +1,11 @@
+//
+//  RegistrationView.swift
+//  AuthPackage
+//
+//  Created by Zaid MOUMNI on 12/09/2025.
+//
+
+
 import SwiftUI
 
 public struct RegistrationView: View {
