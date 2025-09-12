@@ -14,7 +14,6 @@ import AuthPackage
 import AuthenticationServices
 import SwiftUI
 
-
 // MARK: - A Sendable wrapper around the core client existential
 private struct UnsafeSendableClient: @unchecked Sendable {
     let value: AuthClientProtocol
@@ -53,7 +52,9 @@ private actor AuthWorker {
     }
 
     // PASSWORD RESET
-    func requestPasswordReset(email: String, type: String) async throws -> String? {
+    func requestPasswordReset(email: String, type: String) async throws
+        -> String?
+    {
         try await clientBox.value.requestPasswordReset(email: email, type: type)
     }
 
@@ -95,7 +96,6 @@ public final class AuthViewModel: ObservableObject {
     @Published public var displayName: String? = nil
     @Published public var notice: Notice? = nil
 
-
     private let router: AuthUIRouter
     private let worker: AuthWorker
 
@@ -127,17 +127,26 @@ public final class AuthViewModel: ObservableObject {
             await self?.updateDisplayNameFromAccessToken()
         }
     }
-    
-    private func showSuccess(_ message: String, autoDismiss: TimeInterval = 2.5) {
-        notice = Notice(kind: .success, message: message, autoDismissAfter: autoDismiss)
+
+    private func showSuccess(_ message: String, autoDismiss: TimeInterval = 2.5)
+    {
+        notice = Notice(
+            kind: .success,
+            message: message,
+            autoDismissAfter: autoDismiss
+        )
     }
 
     private func showErrorNotice(_ message: String) {
-        notice = Notice(kind: .error, message: message, autoDismissAfter: 0) // stays until dismissed
+        notice = Notice(kind: .error, message: message, autoDismissAfter: 0)  // stays until dismissed
     }
 
     private func showInfo(_ message: String, autoDismiss: TimeInterval = 2.5) {
-        notice = Notice(kind: .info, message: message, autoDismissAfter: autoDismiss)
+        notice = Notice(
+            kind: .info,
+            message: message,
+            autoDismissAfter: autoDismiss
+        )
     }
 
     // MARK: Login
@@ -153,14 +162,17 @@ public final class AuthViewModel: ObservableObject {
             )
             // Flip immediately and clear credentials
             self.isAuthenticated = true
-            self.email = ""; self.password = ""
+            self.email = ""
+            self.password = ""
             updateDisplayNameFromAccessToken()
             showSuccess("Welcome\(displayName.map { ", \($0)" } ?? "")!")
+
             refreshAuthState()
         } catch {
             let msg = userMessage(for: error)
             errorMessage = msg
-            showErrorNotice(msg)        }
+            showErrorNotice(msg)
+        }
     }
 
     // MARK: Logout
@@ -170,7 +182,7 @@ public final class AuthViewModel: ObservableObject {
         self.isAuthenticated = false
         self.displayName = nil
         clearAllForms()
-
+        showInfo("Signed out")
         isLoading = true
         defer { isLoading = false }
         do {
@@ -198,7 +210,9 @@ public final class AuthViewModel: ObservableObject {
                 name: registerName.isEmpty ? nil : registerName
             )
             // success → clear registration fields, stay unauthenticated
-            registerEmail = ""; registerPassword = ""; registerName = ""
+            registerEmail = ""
+            registerPassword = ""
+            registerName = ""
             errorMessage = nil
             showSuccess("Account created. Please sign in.")
             return true
@@ -217,11 +231,16 @@ public final class AuthViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            _ = try await worker.requestPasswordReset(email: resetEmail, type: "client")
+            _ = try await worker.requestPasswordReset(
+                email: resetEmail,
+                type: "client"
+            )
             resetEmail = ""
             showSuccess("Check your email for reset instructions.")
         } catch {
-            errorMessage = userMessage(for: error)
+            let msg = userMessage(for: error)
+            errorMessage = msg
+            showErrorNotice(msg)
         }
     }
 
@@ -237,7 +256,9 @@ public final class AuthViewModel: ObservableObject {
             resetNewPassword = ""
             showSuccess("Password updated. Please sign in.")
         } catch {
-            errorMessage = userMessage(for: error)
+            let msg = userMessage(for: error)
+            errorMessage = msg
+            showErrorNotice(msg)
         }
     }
 
@@ -257,9 +278,12 @@ public final class AuthViewModel: ObservableObject {
             _ = try await worker.loginWithMicrosoft(from: anchor)
             self.isAuthenticated = true
             updateDisplayNameFromAccessToken()
+            showSuccess("Welcome\(displayName.map { ", \($0)" } ?? "")!")
             refreshAuthState()
         } catch {
-            errorMessage = userMessage(for: error)
+            let msg = userMessage(for: error)
+            errorMessage = msg
+            showErrorNotice(msg)
         }
     }
 

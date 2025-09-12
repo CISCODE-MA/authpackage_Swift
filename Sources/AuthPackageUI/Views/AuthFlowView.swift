@@ -49,5 +49,11 @@ public struct AuthFlowView: View {
             openURL(url)
         }
         .animation(.easeInOut, value: vm.isAuthenticated)
+        .overlay(alignment: .top) {
+            NoticeBanner(notice: $vm.notice)
+        }
+        .overlay {
+            LoadingOverlay(isVisible: vm.isLoading)
+        }
     }
 }
