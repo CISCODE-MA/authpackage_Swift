@@ -53,5 +53,9 @@ public struct RegistrationView: View {
             }
         }
         .navigationTitle("Sign Up")
+        
+        NavigationLink(destination: LoginView(vm: vm)) {
+            Text("Already have an account? Sign back in")
+        }
     }
 }

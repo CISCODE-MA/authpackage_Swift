@@ -34,5 +34,6 @@ public struct AuthFlowView: View {
             }
         }
         .animation(.easeInOut, value: vm.isAuthenticated)
+        .tint(style.colors.primary)
     }
 }

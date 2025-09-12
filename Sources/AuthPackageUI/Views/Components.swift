@@ -23,9 +23,6 @@ struct PrimaryButton: ViewModifier {
             )
     }
 }
-extension View {
-    func primaryButton() -> some View { modifier(PrimaryButton()) }
-}
 
 struct FieldBackground: ViewModifier {
     @Environment(\.authUIStyle) private var style
@@ -40,9 +37,6 @@ struct FieldBackground: ViewModifier {
                 )
             )
     }
-}
-extension View {
-    func fieldBackground() -> some View { modifier(FieldBackground()) }
 }
 
 struct TitleText: ViewModifier {
@@ -60,4 +54,3 @@ struct TitleText: ViewModifier {
         return content.font(font).foregroundStyle(style.colors.text)
     }
 }
-extension View { func authTitle() -> some View { modifier(TitleText()) } }
