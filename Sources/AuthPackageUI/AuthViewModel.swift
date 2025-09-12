@@ -113,15 +113,7 @@ public final class AuthViewModel: ObservableObject {
                 password: registerPassword,
                 name: registerName.isEmpty ? nil : registerName
             )
-            // many backends auto-login on register and return tokens;
-            // if not, you can optionally call login() here.
-            refreshAuthState()
-            // Optional: Auto-login using the just-entered credentials if your backend doesn't sign in:
-            if !isAuthenticated {
-                _ = try await worker.login(email: registerEmail, password: registerPassword)
-                self.isAuthenticated = true
-                refreshAuthState()
-            }
+            // No auto-login: the hosting view should navigate back to Login.
         } catch {
             errorMessage = (error as NSError).localizedDescription
         }
