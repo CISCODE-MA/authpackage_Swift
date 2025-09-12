@@ -14,4 +14,8 @@ public enum APIError: Error, Equatable {
     case decoding(String)
     case network(String)
     case unknown
+    case badRequest(String)
+    case clientError
+    case serverError
+    case notFound
 }
