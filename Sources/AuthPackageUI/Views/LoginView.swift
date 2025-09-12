@@ -5,15 +5,12 @@
 //  Created by Zaid MOUMNI on 12/09/2025.
 //
 
-import SwiftUI
-import AuthenticationServices
-
 public struct LoginView: View {
     @Environment(\.authUIStyle) private var style
     @StateObject private var vm = AuthViewModel()
     @EnvironmentObject private var router: AuthUIRouter
 
-    public init() {}
+    @State private var showError = false  // ADD
 
     public var body: some View {
         VStack(alignment: .leading, spacing: style.metrics.spacing) {
@@ -31,58 +28,48 @@ public struct LoginView: View {
                     .textContentType(.password)
                     .fieldBackground()
 
-                Button { Task { await vm.login() } } label: {
-                    HStack { if vm.isLoading { ProgressView() }; Text("Sign In") }
-                }
-                .primaryButton()
-                .disabled(vm.email.isEmpty || vm.password.isEmpty || vm.isLoading)
-
-                if router.config.microsoftEnabled {
-                    SignInWithMicrosoftButton { anchor in
-                        Task { await vm.loginWithMicrosoft(anchor: anchor) }
+                Button {
+                    print("[AuthUI] Sign In tapped")  // ADD
+                    Task {
+                        await vm.login()
+                        if let err = vm.errorMessage, !err.isEmpty {
+                            print("[AuthUI] Login error: \(err)")  // ADD
+                            showError = true  // ADD
+                        } else {
+                            print("[AuthUI] Login success")  // ADD
+                        }
+                    }
+                } label: {
+                    HStack {
+                        if vm.isLoading { ProgressView() }
+                        Text("Sign In")
                     }
                 }
+                .primaryButton()
+                .disabled(
+                    vm.email.isEmpty || vm.password.isEmpty || vm.isLoading
+                )
 
                 NavigationLink(destination: PasswordResetRequestView()) {
                     Text("Forgot password?")
                 }
             }
 
-            if let error = vm.errorMessage {
-                Text(error).foregroundStyle(.red).font(.footnote)
+            if let error = vm.errorMessage, !error.isEmpty {
+                Text(error).foregroundColor(.red).font(.footnote)
             }
         }
         .foregroundStyle(style.colors.text)
         .navigationTitle("")
-    }
-}
-
-private struct SignInWithMicrosoftButton: View {
-    var action: (ASPresentationAnchor) -> Void
-    @State private var window: ASPresentationAnchor?
-
-    var body: some View {
-        Button {
-            if let w = window { action(w) }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "m.circle")
-                Text("Sign in with Microsoft")
+        .alert(
+            "Login failed",
+            isPresented: $showError,
+            actions: {
+                Button("OK", role: .cancel) {}
+            },
+            message: {
+                Text(vm.errorMessage ?? "Unknown error")
             }
-        }
-        .buttonStyle(.bordered)
-        .background(WindowReader(anchor: $window))
+        )
     }
-}
-
-/// Finds the current presentation anchor for ASWebAuthenticationSession.
-private struct WindowReader: UIViewRepresentable {
-    @Binding var anchor: ASPresentationAnchor?
-
-    func makeUIView(context: Context) -> UIView {
-        let v = UIView(frame: .zero)
-        DispatchQueue.main.async { [weak v] in anchor = v?.window }
-        return v
-    }
-    func updateUIView(_ uiView: UIView, context: Context) {}
 }

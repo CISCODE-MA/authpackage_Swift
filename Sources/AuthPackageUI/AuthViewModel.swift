@@ -81,7 +81,9 @@ public final class AuthViewModel: ObservableObject {
 
     public init(router: AuthUIRouter = .shared) {
         self.router = router
-        self.worker = AuthWorker(clientBox: UnsafeSendableClient(value: router.client))
+        self.worker = AuthWorker(
+            clientBox: UnsafeSendableClient(value: router.client)
+        )
         refreshAuthState()
     }
 
@@ -97,10 +99,17 @@ public final class AuthViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            _ = try await worker.login(email: email, password: password)
+            print("[AuthUI] Calling core login(email:\(email))")  // ADD
+            _ = try await worker.login(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password
+            )
+            print("[AuthUI] Core login returned OK")  // ADD
             refreshAuthState()
         } catch {
-            errorMessage = (error as NSError).localizedDescription
+            let msg = (error as NSError).localizedDescription
+            print("[AuthUI] Core login threw: \(msg)")  // ADD
+            errorMessage = msg
         }
     }
 
