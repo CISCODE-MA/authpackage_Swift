@@ -23,7 +23,7 @@ public protocol AuthClientProtocol {
     ) async throws -> User
 
     // Password reset
-    func requestPasswordReset(email: String) async throws -> String?
+    func requestPasswordReset(email: String, type: String) async throws -> String?
     func resetPassword(token: String, newPassword: String) async throws
         -> String?
 
@@ -132,8 +132,8 @@ public final class AuthClient: AuthClientProtocol {
     }
 
     // MARK: - Password reset
-    public func requestPasswordReset(email: String) async throws -> String? {
-        try await resetService.requestReset(email: email)
+    public func requestPasswordReset(email: String, type: String) async throws -> String? {
+        try await resetService.requestReset(email: email, type: type)
     }
 
     public func resetPassword(token: String, newPassword: String) async throws
