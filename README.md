@@ -1,160 +1,209 @@
-# AuthPackage (iOS / Swift) — Core + Drop-in UI
+# AuthPackage (iOS / Swift) — Core + Drop‑in UI (Ultimate Guide)
 
-> **Purpose**  
-> AuthPackage is a production-ready Swift package that integrates with your Express-based authentication backend.  
-> It provides:
-> - A clean **core facade** (`AuthPackage`) for login, logout, refresh, registration, password reset, and  Microsoft OAuth.  
-> - A ready-made **SwiftUI UI module** (`AuthPackageUI`) shipping pre-built views: Login, Registration, Forgot/Reset, Post-login.  
-> - **Theming and configuration** so new apps can install, configure once, and get a complete auth flow.
+> This guide is for iOS developers integrating **AuthPackage** into a fresh app. It covers
+> installation, configuration, Microsoft OAuth, app URL schemes, common pitfalls, and a
+> full end‑to‑end checklist. It **keeps the original Architecture section** (expanded below)
+> and adds everything a new dev needs to ship.
 
 ---
 
 ## Table of Contents
 
 1. [Architecture](#architecture)  
-2. [Installation (SPM)](#installation-spm)  
-3. [Configuration](#configuration)  
-4. [Quick Start](#quick-start) 
-5. [Backend Contract](#backend-contract)  
-6. [Public API](#public-api)  
-7. [Theming](#theming)  
-8. [Post-Login Redirect](#post-login-redirect)  
-9. [Error Handling](#error-handling)  
-10. [Token Storage](#token-storage)  
-11. [Platform Notes](#platform-notes)  
-12. [Testing](#testing)  
-13. [Troubleshooting](#troubleshooting)  
-14. [Security Checklist](#security-checklist)  
-15. [Versioning](#versioning)
+2. [Requirements](#requirements)  
+3. [Installation (SPM)](#installation-spm)  
+4. [Quick Start (copy‑paste)](#quick-start-copy-paste)  
+5. [Configuration Reference](#configuration-reference)  
+6. [App URL Scheme (Info.plist)](#app-url-scheme-infoplist)  
+7. [Microsoft OAuth (Dev & Prod)](#microsoft-oauth-dev--prod)  
+8. [Backend Contract (for reference)](#backend-contract-for-reference)  
+9. [Using the Core Client Directly](#using-the-core-client-directly)  
+10. [Token Storage & Refresh](#token-storage--refresh)  
+11. [Post-Login Deeplink](#post-login-deeplink)  
+12. [Troubleshooting](#troubleshooting)  
+13. [Security Checklist](#security-checklist)  
+14. [Versioning](#versioning)  
+15. [Appendix: Minimal Host App Template](#appendix-minimal-host-app-template)
 
 ---
 
 ## Architecture
 
 ```
-┌───────────────────────────┐
-│       Your iOS App        │
-│  (SwiftUI / UIKit, etc.)  │
-└─────────────┬─────────────┘
-              │
-       AuthPackageUI.makeRoot()
-              │
-      ┌───────▼─────────┐
-      │   AuthFlowView  │ 
-      └───────┬─────────┘
-              │ uses
-      ┌───────▼─────────┐
-      │ AuthViewModel   │ 
-      └───────┬─────────┘
-              ▼
-         AuthClient facade
-              │
-        Services Layer
- (LoginService, TokenService, etc.)
-              │
-              ▼
-       NetworkClient / URLSession
-              │
-              ▼
-            Backend
+       ┌─────────────────────────────────────────────────┐
+       │                   Your App                      │
+       │  SwiftUI navigation, state, feature screens     │
+       └───────────────────────▲─────────────────────────┘
+                               │
+                               │ consumes
+                               │
+       ┌───────────────────────┴─────────────────────────┐
+       │                AuthPackageUI                     │
+       │  Prebuilt flows (Login, Register, Forgot/Reset) │
+       │  Theming (CSS-like vars), routing helpers       │
+       └───────────────────────▲─────────────────────────┘
+                               │
+                               │ uses
+                               │
+       ┌───────────────────────┴─────────────────────────┐
+       │                   AuthPackage                    │
+       │  AuthClient facade                              │
+       │  Services (LoginService, TokenService, etc.)    │
+       │  Endpoints + NetworkClient (URLSession)         │
+       └───────────────────────▲─────────────────────────┘
+                               │
+                               │ HTTP (JSON/JWT)
+                               │
+       ┌───────────────────────┴─────────────────────────┐
+       │                    Backend                       │
+       │  Express API + Passport (local + Microsoft)     │
+       │  Issues app JWTs; stores refresh; deep-links    │
+       └─────────────────────────────────────────────────┘
 ```
 
-- **Core (`AuthPackage`)**: provides typed API over backend endpoints.  
-- **UI (`AuthPackageUI`)**: ships SwiftUI views, consumes the core client, applies style, and manages navigation.  
-- **Router**: handles reset password deep-links and optional post-login redirect.  
+- **Core (`AuthPackage`)**: typed API over backend endpoints (login, refresh, logout, register, reset, Microsoft OAuth).  
+- **UI (`AuthPackageUI`)**: SwiftUI screens using the core client; ships a drop‑in “auth flow”.  
+- **Extensibility**: you can use the Core without the UI, or embed the UI and override visuals via theme variables.
+
+---
+
+## Requirements
+
+- **Xcode** 16+  
+- **iOS** 15.0+  
+- **Swift** 5.9+  
+- A reachable **auth backend** implementing the contract below
 
 ---
 
 ## Installation (SPM)
 
-1. **Xcode → File → Add Package Dependencies…**  
-2. Enter repo URL:  
+1. Xcode → **File** → **Add Package Dependencies…**  
+2. Paste your repo URL:  
    ```
    https://github.com/YourOrg/AuthPackage-Swift.git
-   ```  
-3. Rule: **Up to Next Major Version** from `1.0.0`  
-4. Add products:  
-   - `AuthPackage`  
-   - `AuthPackageUI`
-
-Requirements: iOS 15+, Swift 5.9+, Xcode 16+
+   ```
+3. Rule: **Up to Next Major** from `1.0.0`  
+4. Add products to your app target: **AuthPackage**, **AuthPackageUI**
 
 ---
 
-## Configuration
-
-### Core
-
-```swift
-import AuthPackage
-
-let core = AuthClient(
-  config: AuthConfiguration(
-    baseURL: URL(string: "https://api.example.com")!, // HTTPS required on device
-    refreshUsesCookie: true, 
-    redirectScheme: "myapp",     // keep for future OAuth
-    microsoftEnabled: false      // disable OAuth in this version
-  ),
-  tokenStore: KeychainTokenStore(service: "com.example.app", account: "auth")
-)
-```
-
-### UI
+## Quick Start (copy‑paste)
 
 ```swift
 import SwiftUI
+import AuthPackage
 import AuthPackageUI
 
 @main
 struct MyApp: App {
+  // Backend base URL:
+  // - Simulator: http://localhost:3000
+  // - Real device: http://<YOUR-MAC-LAN-IP>:3000  (or https://<your-tunnel>.ngrok.io)
+  private let baseURL = URL(string: "http://localhost:3000")!
+
+  private var ui: AuthUIConfig {
+    AuthUIConfig(
+      baseURL: baseURL,
+      appScheme: "authdemo",       // must match Info.plist URL scheme
+      microsoftEnabled: true,      // show the Microsoft button
+      postLoginDeeplink: URL(string: "authdemo://home") // optional
+    )
+  }
+
+  private var core: AuthConfiguration {
+    AuthConfiguration(
+      baseURL: baseURL,
+      refreshUsesCookie: true,
+      redirectScheme: "authdemo",  // required for Microsoft OAuth
+      microsoftEnabled: true
+    )
+  }
+
   var body: some Scene {
     WindowGroup {
-      AuthPackageUI.makeRoot(
-        config: AuthUIConfig(
-          baseURL: URL(string: "https://api.example.com")!,
-          appScheme: "myapp",
-          microsoftEnabled: false,
-          cssVariables: theme,  // theming (see below)
-          postLoginDeeplink: URL(string: "myapp://home") // optional
-        ),
-        client: core
-      )
+      let client = AuthClient(config: core)
+      AuthPackageUI.makeRoot(config: ui, client: client)
     }
   }
 }
 ```
 
-- **cssVariables**: string with CSS-like tokens controlling colors, spacing, typography.  
-- **postLoginDeeplink**: if provided, the UI opens this URL when auth succeeds; otherwise shows the packaged post-login screen.  
+> **Device vs Simulator**: a device **cannot** reach your Mac’s `localhost`. Use your LAN IP or an HTTPS tunnel, and ensure the backend & Azure app use that exact host.
 
 ---
 
-## Quick Start
+## Configuration Reference
 
-### Email / Password Login
-```swift
-let claims = try await core.login(email: "user@test.com", password: "Secret123!")
-```
+### `AuthUIConfig` (UI module)
+- `baseURL: URL` — backend origin.
+- `appScheme: String` — your app’s custom URL scheme (must be in Info.plist).
+- `microsoftEnabled: Bool` — show/hide Microsoft button.
+- `postLoginDeeplink: URL?` — open after success (optional).
+- `cssVariables: String?` — theme tokens (optional; see theming below).
 
-### Logout
-```swift
-try await core.logout()
-```
+### `AuthConfiguration` (Core module)
+- `baseURL: URL` — backend origin.
+- `refreshUsesCookie: Bool` — allow refresh via HttpOnly cookie (backend support required).
+- `redirectScheme: String?` — your URL scheme for Microsoft OAuth (required if `microsoftEnabled`).
+- `microsoftEnabled: Bool` — enable Microsoft OAuth in the client.
 
-### Registration
-```swift
-let user = try await core.register(email: "new@test.com", password: "Secret123!", name: "New User")
-```
-
-### Password Reset
-```swift
-try await core.requestPasswordReset(email: "user@test.com")
-try await core.resetPassword(token: "<token>", newPassword: "NewSecret!")
-```
+> Keep `microsoftEnabled` **true in both configs** if you want the button visible **and** the client able to launch the flow.
 
 ---
 
-## Backend Contract
+## App URL Scheme (Info.plist)
+
+Add a URL type with the scheme you referenced above (`authdemo` here):
+
+```xml
+<!-- Info.plist -->
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>authdemo</string>
+    </array>
+  </dict>
+</array>
+```
+
+This lets the backend deep‑link back: `authdemo://auth/callback?accessToken=...&refreshToken=...`
+
+---
+
+## Microsoft OAuth (Dev & Prod)
+
+1) **Enable it**  
+   - `AuthUIConfig.microsoftEnabled = true`  
+   - `AuthConfiguration.microsoftEnabled = true`  
+   - `AuthConfiguration.redirectScheme = "authdemo"` (same as Info.plist)
+
+2) **Choose the right base URL**  
+   - Simulator → `http://localhost:3000`  
+   - Device → `http://<LAN-IP>:3000` or a tunnel → `https://<domain>/`  
+
+3) **Azure app (server‑side setting you should verify with backend)**  
+   - **Authentication → Platform: Web → Redirect URIs** must include the backend callback you actually use:  
+     - `http://localhost:3000/api/auth/microsoft/callback` (simulator)  
+     - `http://<LAN-IP>:3000/api/auth/microsoft/callback` (device on Wi‑Fi)  
+     - `https://<tunnel>/api/auth/microsoft/callback` (device + HTTPS)  
+   - (Recommended) **Token configuration → Optional claims**: add `email`, `upn`, `preferred_username` to avoid missing email claims.
+
+4) **What “success” looks like**  
+   - Microsoft web sheet opens → you sign in  
+   - Microsoft returns to backend callback (approved reply URL)  
+   - Backend 302’s to `authdemo://auth/callback?...`  
+   - Sheet dismisses; the package parses/saves tokens; you’re authenticated
+
+> If you see **AADSTS500113 (no reply address)**, the Azure app is missing the **exact** callback URI your backend sent. Add it to the Azure app and retry.
+
+---
+
+## Backend Contract (for reference)
+
+> The UI/Core call these endpoints; you usually don’t need to call them yourself.
 
 - `POST /api/auth/clients/login` → `{ accessToken, refreshToken }`  
 - `POST /api/auth/refresh-token` → `{ accessToken }`  
@@ -162,138 +211,125 @@ try await core.resetPassword(token: "<token>", newPassword: "NewSecret!")
 - `POST /api/auth/forgot-password`  
 - `POST /api/auth/reset-password` (body: `{ token, password }`)  
 - `POST /api/clients/register` → `{ id, email, name?, roles? }`  
+- **Microsoft OAuth (web)**  
+  - `GET /api/auth/microsoft?redirect=<app-scheme>://auth/callback`  
+  - `GET /api/auth/microsoft/callback` → deep‑link with tokens  
+- **Microsoft OAuth (native)** *(optional, when using MSAL)*  
+  - `POST /api/auth/microsoft/exchange` (send Microsoft ID token; receive app tokens)
 
 ---
 
-## Public API
-
-### AuthConfiguration
-```swift
-public struct AuthConfiguration: Sendable {
-  public let baseURL: URL
-  public let refreshUsesCookie: Bool
-  public let redirectScheme: String?
-  public let microsoftEnabled: Bool
-}
-```
-
-### AuthClientProtocol Essentials
-```swift
-public protocol AuthClientProtocol {
-  func login(email: String, password: String) async throws -> JWTClaims?
-  func refreshIfNeeded() async throws -> String?
-  func logout() async throws
-  func register(email: String, password: String, name: String?, roles: [String]?) async throws -> User
-  func requestPasswordReset(email: String) async throws -> String?
-  func resetPassword(token: String, newPassword: String) async throws -> String?
-  @MainActor
-  func loginWithMicrosoft(from anchor: ASPresentationAnchor) async throws -> JWTClaims?
-  var currentUser: User? { get }
-  var tokens: Tokens? { get }
-}
-```
-
----
-
-## Theming
-
-Pass CSS-like tokens in `AuthUIConfig`:
+## Using the Core Client Directly
 
 ```swift
-let theme = """
-:root {
-  --authui-primary-color: #0a84ff;
-  --authui-accent-color:  #34c759;
-  --authui-background-color: #0b0b0b;
-  --authui-text-color:     #ffffff;
-  --authui-corner-radius: 16;
-  --authui-spacing:       14;
-  --authui-font-family:   Inter;
-  --authui-title-size:    28;
-  --authui-body-size:     17;
-}
-"""
+let client = AuthClient(config: core)
+
+// Email/password
+let claims = try await client.login(email: "user@example.com", password: "Secret123!")
+
+// Microsoft OAuth (needs a presentation anchor)
+import AuthenticationServices
+guard let window = UIApplication.shared.connectedScenes
+  .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { fatalError("No window") }
+let msClaims = try await client.loginWithMicrosoft(from: window)
+
+// Refresh if needed (returns non‑nil if refreshed)
+let access = try await client.refreshIfNeeded()
+
+// Logout
+try await client.logout()
 ```
 
-Mapped areas:
-- Primary / accent color  
-- Background, text color  
-- Corner radius, spacing  
-- Font family + sizes  
+---
+
+## Token Storage & Refresh
+
+- Default storage is **in‑memory** (simple for dev).  
+- For production, implement a `TokenStore` with **Keychain** and pass it to `AuthClient`.  
+- `refreshIfNeeded()` uses the refresh token (or HttpOnly cookie, if enabled) to mint a new access token.
+
+> Tip (dev): clear tokens on app start to force the login flow when testing.
 
 ---
 
-## Post-Login Redirect
+## Post-Login Deeplink
 
-- Provide `postLoginDeeplink` in `AuthUIConfig`.  
-- When `vm.isAuthenticated` flips, `AuthFlowView` calls `openURL(url)`.  
-- Host app can catch the URL scheme to show a specific screen.  
-
----
-
-## Error Handling
-
-Errors normalized to `APIError`:
-- `unauthorized` → “Invalid email or password”  
-- `network` → connectivity/TLS  
-- `server(status,message)` → backend error detail  
-- `cancelled` → user aborted  
-
-UI shows friendly alerts; logout errors are swallowed to avoid noise.
-
----
-
-## Token Storage
-
-- `InMemoryTokenStore()` — ephemeral  
-- `KeychainTokenStore(service:account:)` — persistent, secure  
-- Custom stores supported via `TokenStore` protocol.
-
----
-
-## Platform Notes
-
-- Simulator: `http://localhost:3000` works.  
-- Device: requires **HTTPS** (use ngrok).  
-- OAuth disabled by default in this version.
-
----
-
-## Testing
-
-- To force login every run:
-```swift
-#if DEBUG
-try? KeychainTokenStore(service: "com.example.app", account: "auth").clear()
-#endif
-```
+If `postLoginDeeplink` is set on `AuthUIConfig`, the UI opens it after success. Handle the URL (e.g., `authdemo://home`) in your app to route to the right screen.
 
 ---
 
 ## Troubleshooting
 
-- **UI doesn’t switch after login** → ensure you use `AuthPackageUI.makeRoot`.  
-- **Logout shows errors** → update to latest UI, which clears forms & suppresses logout noise.  
-- **Registration doesn’t return to login** → current UI shows a success alert, clears fields, then dismisses.
+**Microsoft page shows “No reply address is registered (AADSTS500113)”**  
+- Azure app is missing the callback URL your backend used (`redirect_uri=`). Add the **exact** URL in Azure → Authentication.
+
+**Web sheet loops after you enter email**  
+- Callback mismatch or missing OIDC claims. Ensure Azure has the exact callback; add optional claims (email/upn/preferred_username).
+
+**Sheet never dismisses to the app**  
+- On a real device you’re still using `localhost` — switch `baseURL` to your LAN IP or tunnel.  
+- Ensure Info.plist scheme matches `redirectScheme/appScheme`.
+
+**Backend crash: `ValidationError: email is required` after Microsoft**  
+- The ID token lacked an email-ish claim. Ask your admin to add optional claims in Azure, or pre‑create/link the user in DB.
+
+**Microsoft button not visible**  
+- Set `microsoftEnabled = true` in **both** UI and Core configs.
+
+**Simulator works; device fails**  
+- Device can’t reach your Mac’s `localhost`. Use LAN IP / tunnel and add the corresponding callback URL in Azure.
 
 ---
 
 ## Security Checklist
 
-- Always use HTTPS in prod.  
-- Store tokens in Keychain.  
-- Keep JWT expiry short.  
-- Don’t log tokens.  
-- Use unique URL scheme.  
+- Use **HTTPS** in production; enable ATS exceptions only for dev.  
+- Store tokens in **Keychain** (implement a `TokenStore`).  
+- Short‑lived access tokens; rotate refresh tokens.  
+- Never log tokens.  
+- Use a **unique** URL scheme; avoid overly generic names.  
+- Limit CORS and allowed callback hosts on the backend.
 
 ---
 
 ## Versioning
 
-- Semantic Versioning (SemVer)  
-- Breaking changes only in major releases  
+- **SemVer**. Breaking changes only in **major** versions.  
+- Each release includes a changelog entry.
 
 ---
+
+## Appendix: Minimal Host App Template
+
+```swift
+import SwiftUI
+import AuthPackage
+import AuthPackageUI
+
+@main
+struct AuthDemoApp: App {
+  var body: some Scene {
+    WindowGroup {
+      let base = URL(string: "http://localhost:3000")!   // device => LAN IP / tunnel
+      let ui = AuthUIConfig(
+        baseURL: base,
+        appScheme: "authdemo",
+        microsoftEnabled: true,
+        postLoginDeeplink: URL(string: "authdemo://home")
+      )
+      let core = AuthConfiguration(
+        baseURL: base,
+        refreshUsesCookie: true,
+        redirectScheme: "authdemo",
+        microsoftEnabled: true
+      )
+      let client = AuthClient(config: core)
+      AuthPackageUI.makeRoot(config: ui, client: client)
+    }
+  }
+}
+```
+
 ---
 
-© CisCode Internal — For private use within the organization.
+© Your Organization — Internal use.
