@@ -1,3 +1,11 @@
+//
+//  EndpointsTests.swift
+//  AuthPackage
+//
+//  Created by Zaid MOUMNI on 16/09/2025.
+//
+
+
 import XCTest
 @testable import AuthPackage
 

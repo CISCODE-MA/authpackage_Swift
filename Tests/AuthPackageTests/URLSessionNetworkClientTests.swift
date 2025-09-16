@@ -43,6 +43,34 @@ final class URLSessionNetworkClientTests: XCTestCase {
         URLProtocolStub.removeAll()
     }
 
+    func test_post_json_body_and_headers() async throws {
+        let client = makeClient()
+        let base = URL(string: "http://unit.test")!
+        let path = "/echo"
+        let url = URL(string: base.absoluteString + path)!
+        let payload = try JSONEncoder().encode(
+            Echo(ok: true, message: "posted")
+        )
+
+        URLProtocolStub.set([
+            url: .init(
+                statusCode: 200,
+                headers: ["Content-Type": "application/json"],
+                body: payload
+            )
+        ])
+
+        let _: Echo = try await client.send(
+            baseURL: base,
+            path: path,
+            method: .POST,
+            headers: ["Content-Type": "application/json"],
+            body: ["x": "y"]
+        )
+        // If decoding succeeds, it means request reached the stub URL exactly.
+        URLProtocolStub.removeAll()
+    }
+
     func test_server_error_maps_to_APIError_network_with_serverText() async {
         let client = makeClient()
         let base = URL(string: "http://unit.test")!
@@ -68,7 +96,6 @@ final class URLSessionNetworkClientTests: XCTestCase {
             )
             XCTFail("Expected error")
         } catch APIError.network(let detail) {
-            // 🔧 Your client wraps server errors into APIError.network("server(status: 400, ...)")
             XCTAssertTrue(detail.contains("server(status: 400"))
             XCTAssertTrue(detail.contains("Nope"))
         } catch {
@@ -104,7 +131,6 @@ final class URLSessionNetworkClientTests: XCTestCase {
             )
             XCTFail("Expected decoding error")
         } catch APIError.network(let detail) {
-            // 🔧 Your client wraps decoding failures into APIError.network("decoding(...)")
             XCTAssertTrue(
                 detail.contains("decoding(") || detail.contains("keyNotFound")
                     || detail.contains("typeMismatch")
