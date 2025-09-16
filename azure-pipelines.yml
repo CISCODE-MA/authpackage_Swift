@@ -25,8 +25,9 @@ steps:
 
   - task: Cache@2
     displayName: Cache SPM (.build/.swiftpm)
+    continueOnError: true                 # belt-and-suspenders: never fail CI over cache
     inputs:
-      key: 'spm | "$(Agent.OS)" | **/Package.resolved'
+      key: 'spm | "$(Agent.OS)" | $(Build.SourcesDirectory)/Package.swift'
       restoreKeys: |
         spm | "$(Agent.OS)"
       path: |
