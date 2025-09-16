@@ -1,4 +1,4 @@
-# Azure DevOps CI for Swift Package (Core).
+# CI for AuthPackage (Core).
 
 trigger:
   branches:
@@ -14,7 +14,7 @@ pool:
 
 variables:
   CONFIG: debug
-  SONAR_ENABLED: 'false'
+  SONAR_ENABLED: 'false'                  # flip to 'true' after you install the SonarQube extension
   SONARQ_ENDPOINT: 'sonarqube-authpackage'
   SONAR_PROJECT_KEY: 'authpackage'
   SONAR_PROJECT_NAME: 'authpackage'
@@ -44,16 +44,17 @@ steps:
       echo "Running SwiftPM tests with coverage…"
       swift test --enable-code-coverage
 
-      # Modern way to find coverage/profile
+      # Determine coverage profile path (newer toolchains)
       if swift test --show-codecov-path >/dev/null 2>&1; then
         CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
         PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
         PROF="$PROF_DIR/default.profdata"
       else
+        # Fallback for older toolchains
         PROF=".build/debug/codecov/default.profdata"
       fi
 
-      # Test runner binary for llvm-cov
+      # Determine test runner binary for llvm-cov
       if swift test --show-test-binary-path >/dev/null 2>&1; then
         TEST_BIN=$(swift test --show-test-binary-path)
       else
@@ -63,60 +64,59 @@ steps:
       echo "Profile: $PROF"
       echo "Test binary: $TEST_BIN"
 
-      # Produce lcov so Sonar is plug-and-play later
+      # Produce LCOV now so Sonar is plug-and-play later
       xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
-    displayName: Build & Test (SwiftPM) + generate coverage
+    displayName: Build & Test (SwiftPM) + Generate coverage
 
-  # ---- SonarQube (disabled until SONAR_ENABLED == 'true') ----
-  - task: SonarQubePrepare@6
-    displayName: Prepare SonarQube
-    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
-    inputs:
-      SonarQube: '$(SONARQ_ENDPOINT)'
-      scannerMode: 'CLI'
-      configMode: 'file'                   
-      cliProjectKey: '$(SONAR_PROJECT_KEY)'
-      cliProjectName: '$(SONAR_PROJECT_NAME)'
+  # ---------- SonarQube (completely excluded until SONAR_ENABLED == 'true') ----------
+  # Using a compile-time template 'if' so Azure doesn't even try to load the tasks
+  - ${{ if eq(variables.SONAR_ENABLED, 'true') }}:
+    - task: SonarQubePrepare@6
+      displayName: Prepare SonarQube
+      inputs:
+        SonarQube: '$(SONARQ_ENDPOINT)'
+        scannerMode: 'CLI'
+        configMode: 'file'                   # uses sonar-project.properties in repo
+        cliProjectKey: '$(SONAR_PROJECT_KEY)'
+        cliProjectName: '$(SONAR_PROJECT_NAME)'
 
-  - task: SonarQubeAnalyze@6
-    displayName: Run SonarQube analysis
-    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
+    - task: SonarQubeAnalyze@6
+      displayName: Run SonarQube analysis
 
-  - task: SonarQubePublish@6
-    displayName: Publish Sonar Quality Gate
-    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
-    inputs:
-      pollingTimeoutSec: '300'
-  # ------------------------------------------------------------
+    - task: SonarQubePublish@6
+      displayName: Publish Sonar Quality Gate
+      inputs:
+        pollingTimeoutSec: '300'
+  # -------------------------------------------------------------------------------
 
-  # Build a release (optional, fast; artifact is source-based for portability)
+  # Build a release (optional, quick)
   - script: |
       set -euo pipefail
       swift build -c release
     displayName: Build release (optional)
     condition: succeeded()
 
-  # Package *source* artifact so downstream consumers can pull this exact version
+  # Package source artifact (only if tests passed)
   - script: |
       set -euo pipefail
       rm -rf dist
       mkdir -p dist/pkg
 
-      # include canonical source + manifest + docs
+      # Include manifest + sources + docs + (optional) coverage
       cp -a Package.swift dist/pkg/
       [ -f Package.resolved ] && cp Package.resolved dist/pkg/ || true
       [ -d Sources ] && cp -a Sources dist/pkg/ || true
       [ -f README.md ] && cp README.md dist/pkg/ || true
       [ -f LICENSE ] && cp LICENSE dist/pkg/ || true
-
-      # keep coverage for future code-quality stages (optional)
       [ -f coverage.lcov ] && cp coverage.lcov dist/pkg/ || true
 
+      # Short commit hash for filename
+      SHORT="${BUILD_SOURCEVERSION:0:7}"
       pushd dist >/dev/null
-      zip -r "authpackage-src-$(Build.SourceVersionShortHash).zip" pkg >/dev/null
+      zip -r "authpackage-src-${SHORT}.zip" pkg >/dev/null
       popd >/dev/null
 
-      echo "Created dist/authpackage-src-$(Build.SourceVersionShortHash).zip"
+      echo "Created dist/authpackage-src-${SHORT}.zip"
     displayName: Create package source artifact
     condition: succeeded()
 
