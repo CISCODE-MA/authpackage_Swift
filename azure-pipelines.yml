@@ -1,0 +1,84 @@
+# Azure DevOps CI for Swift Package (Core).
+
+trigger:
+  branches:
+    include:
+      - release
+pr:
+  branches:
+    include:
+      - release
+
+pool:
+  vmImage: macos-latest
+
+variables:
+  CONFIG: debug
+  SONAR_ENABLED: 'false'            # reserved for later
+  SONARQ_ENDPOINT: 'sonarqube-authpackage'
+  SONAR_PROJECT_KEY: 'authpackage'
+  SONAR_PROJECT_NAME: 'authpackage'
+
+steps:
+  - checkout: self
+    fetchDepth: 0
+
+  - task: Cache@2
+    displayName: Cache SPM (.build/.swiftpm)
+    inputs:
+      key: 'spm | "$(Agent.OS)" | **/Package.resolved'
+      restoreKeys: |
+        spm | "$(Agent.OS)"
+      path: |
+        .build
+        .swiftpm
+
+  - script: |
+      set -euo pipefail
+      swift --version
+      xcodebuild -version
+    displayName: Show toolchain versions
+
+  - script: |
+      set -euo pipefail
+      echo "Running SwiftPM tests with coverage…"
+      swift test --enable-code-coverage
+
+      if swift test --show-codecov-path >/dev/null 2>&1; then
+        CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
+        PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
+        PROF="$PROF_DIR/default.profdata"
+      else
+        PROF=".build/debug/codecov/default.profdata"
+      fi
+
+      if swift test --show-test-binary-path >/dev/null 2>&1; then
+        TEST_BIN=$(swift test --show-test-binary-path)
+      else
+        TEST_BIN=$(find .build -type f -name '*Tests' -perm -111 2>/dev/null | head -n1)
+      fi
+
+      echo "Profile: $PROF"
+      echo "Test binary: $TEST_BIN"
+
+      xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
+
+      mkdir -p coverage-html
+      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" \
+        -format=html -output-dir coverage-html \
+        -ignore-filename-regex="(.*/Tests/.*)|(.*/Sources/AuthPackageUI/.*)"
+    displayName: Build & Test + Generate coverage (LCOV + HTML)
+
+  - task: PublishBuildArtifacts@1
+    displayName: Upload coverage.lcov
+    condition: succeededOrFailed()
+    inputs:
+      pathToPublish: '$(Build.SourcesDirectory)/coverage.lcov'
+      artifactName: coverage-lcov
+
+  - task: PublishBuildArtifacts@1
+    displayName: Upload coverage HTML
+    condition: succeededOrFailed()
+    inputs:
+      pathToPublish: '$(Build.SourcesDirectory)/coverage-html'
+      artifactName: coverage-html
