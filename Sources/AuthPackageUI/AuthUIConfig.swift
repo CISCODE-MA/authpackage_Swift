@@ -4,6 +4,7 @@
 //
 //  Created by Zaid MOUMNI on 12/09/2025.
 //
+#if os(iOS)
 
 import AuthPackage
 import SwiftUI
@@ -47,3 +48,5 @@ public struct AuthUIConfig: Sendable {
         )
     }
 }
+#endif
+
