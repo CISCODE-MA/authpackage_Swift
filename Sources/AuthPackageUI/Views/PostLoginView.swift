@@ -4,32 +4,36 @@
 //
 //  Created by Zaid MOUMNI on 12/09/2025.
 //
+#if os(iOS)
 
-import SwiftUI
+    import SwiftUI
 
-public struct PostLoginView: View {
-    @ObservedObject var vm: AuthViewModel
-    let onLogout: () -> Void
-    @Environment(\.authUIStyle) private var style
+    public struct PostLoginView: View {
+        @ObservedObject var vm: AuthViewModel
+        let onLogout: () -> Void
+        @Environment(\.authUIStyle) private var style
 
-    public init(vm: AuthViewModel, onLogout: @escaping () -> Void) {
-        self.vm = vm
-        self.onLogout = onLogout
-    }
+        public init(vm: AuthViewModel, onLogout: @escaping () -> Void) {
+            self.vm = vm
+            self.onLogout = onLogout
+        }
 
-    public var body: some View {
-        VStack(spacing: style.metrics.spacing) {
-            Image(systemName: "checkmark.seal.fill").font(.system(size: 48))
-            Text("You're signed in\(vm.displayName.map { ", \($0)" } ?? "")")
+        public var body: some View {
+            VStack(spacing: style.metrics.spacing) {
+                Image(systemName: "checkmark.seal.fill").font(.system(size: 48))
+                Text(
+                    "You're signed in\(vm.displayName.map { ", \($0)" } ?? "")"
+                )
                 .font(
                     .system(size: style.typography.titleSize, weight: .semibold)
                 )
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Button("Log out", action: onLogout).buttonStyle(.bordered)
+                Button("Log out", action: onLogout).buttonStyle(.bordered)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
     }
-}
+#endif

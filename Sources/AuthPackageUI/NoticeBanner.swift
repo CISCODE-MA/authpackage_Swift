@@ -4,6 +4,7 @@
 //
 //  Created by Zaid MOUMNI on 12/09/2025.
 //
+#if os(iOS)
 
 import SwiftUI
 
@@ -104,3 +105,4 @@ public struct NoticeBanner: View {
         }
     }
 }
+#endif

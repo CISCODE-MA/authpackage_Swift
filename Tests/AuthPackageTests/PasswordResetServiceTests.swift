@@ -7,8 +7,8 @@ final class PasswordResetServiceTests: XCTestCase {
         let mock = MockNetworkClient()
         let config = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
 
-        mock.responder = { base, path, method, headers, body in
-            XCTAssertEqual(path, "/api/auth/forgot-password")
+        mock.responder = { _, path, method, _, body in
+            XCTAssertEqual(path, Endpoints.requestPasswordReset) // "/api/auth/forgot-password"
             XCTAssertEqual(method, .POST)
             XCTAssertEqual(body?["email"] as? String, "u@ex.com")
             return ["message":"sent"]
@@ -23,11 +23,9 @@ final class PasswordResetServiceTests: XCTestCase {
         let mock = MockNetworkClient()
         let config = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
 
-        mock.responder = { base, path, method, headers, body in
-            XCTAssertEqual(path, "/api/auth/reset-password")
-            _ = method
+        mock.responder = { _, path, _, _, body in
+            XCTAssertEqual(path, Endpoints.resetPassword) // "/api/auth/reset-password"
             XCTAssertEqual(body?["token"] as? String, "EMAILTOKEN")
-            // accept either "password" or "newPassword"
             let pwd = (body?["password"] as? String) ?? (body?["newPassword"] as? String)
             XCTAssertEqual(pwd, "NewPass!")
             return ["message":"ok"]
@@ -36,5 +34,20 @@ final class PasswordResetServiceTests: XCTestCase {
         let svc = PasswordResetService(config: config, net: mock)
         let msg = try await svc.reset(token: "EMAILTOKEN", newPassword: "NewPass!")
         XCTAssertEqual(msg, "ok")
+    }
+
+    func test_request_reset_default_type_is_client() async throws {
+        let mock = MockNetworkClient()
+        let config = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+
+        mock.responder = { _, path, method, _, body in
+            XCTAssertEqual(path, Endpoints.requestPasswordReset)
+            XCTAssertEqual(method, .POST)
+            XCTAssertEqual(body?["type"] as? String, "client") // default
+            return ["message":"sent"]
+        }
+
+        let svc = PasswordResetService(config: config, net: mock)
+        _ = try await svc.requestReset(email: "u@ex.com")
     }
 }
