@@ -1,9 +1,14 @@
-# CI for AuthPackage (Core).
+# -------------------------------
+# AuthPackage – CI (release branch)
+# -------------------------------
+
+name: authpkg_release_$(Date:yyyyMMdd).$(Rev:r)
 
 trigger:
   branches:
     include:
       - release
+
 pr:
   branches:
     include:
@@ -13,97 +18,90 @@ pool:
   vmImage: macos-latest
 
 variables:
-  CONFIG: debug
-  SONAR_ENABLED: 'false'                  # flip to 'true' after you install the SonarQube extension
+  # Build mode for swift build (we build once more after tests)
+  CONFIG: release
+
+  # Sonar toggle (leave 'false' until the extension + service connection exist)
+  SONAR_ENABLED: 'false'
   SONARQ_ENDPOINT: 'sonarqube-authpackage'
   SONAR_PROJECT_KEY: 'authpackage'
-  SONAR_PROJECT_NAME: 'authpackage'
+  SONAR_PROJECT_NAME: 'AuthPackage'
 
 steps:
   - checkout: self
     fetchDepth: 0
-
-  - task: Cache@2
-    displayName: Cache SPM (.build/.swiftpm)
-    continueOnError: true                 # belt-and-suspenders: never fail CI over cache
-    inputs:
-      key: 'spm | "$(Agent.OS)" | $(Build.SourcesDirectory)/Package.swift'
-      restoreKeys: |
-        spm | "$(Agent.OS)"
-      path: |
-        .build
-        .swiftpm
+    displayName: "Checkout repository"
 
   - script: |
       set -euo pipefail
+      echo "Swift toolchain:"
       swift --version
+      echo "Xcode:"
       xcodebuild -version
-    displayName: Show toolchain versions
+    displayName: "Show toolchain versions"
 
   - script: |
       set -euo pipefail
       echo "Running SwiftPM tests with coverage…"
       swift test --enable-code-coverage
 
-      # Determine coverage profile path (newer toolchains)
+      # Locate coverage profile (newer toolchains)
       if swift test --show-codecov-path >/dev/null 2>&1; then
         CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
         PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
         PROF="$PROF_DIR/default.profdata"
       else
-        # Fallback for older toolchains
+        # Fallback path used by SwiftPM
         PROF=".build/debug/codecov/default.profdata"
       fi
 
-      # Determine test runner binary for llvm-cov
+      # Test runner binary for llvm-cov
       if swift test --show-test-binary-path >/dev/null 2>&1; then
         TEST_BIN=$(swift test --show-test-binary-path)
       else
         TEST_BIN=$(find .build -type f -name '*Tests' -perm -111 2>/dev/null | head -n1)
       fi
 
-      echo "Profile: $PROF"
+      echo "Coverage profile: $PROF"
       echo "Test binary: $TEST_BIN"
 
-      # Produce LCOV now so Sonar is plug-and-play later
+      # Produce LCOV so Sonar can ingest later
       xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
-    displayName: Build & Test (SwiftPM) + Generate coverage
+      echo "Wrote coverage.lcov"
+    displayName: "Build & test (with coverage)"
 
-  # ---------- SonarQube (completely excluded until SONAR_ENABLED == 'true') ----------
-  # Using a compile-time template 'if' so Azure doesn't even try to load the tasks
+  # ---- SonarQube (excluded at compile-time until SONAR_ENABLED == 'true') ----
   - ${{ if eq(variables.SONAR_ENABLED, 'true') }}:
     - task: SonarQubePrepare@6
-      displayName: Prepare SonarQube
+      displayName: "SonarQube | Prepare analysis"
       inputs:
         SonarQube: '$(SONARQ_ENDPOINT)'
         scannerMode: 'CLI'
-        configMode: 'file'                   # uses sonar-project.properties in repo
+        configMode: 'file'   # uses sonar-project.properties in repo
         cliProjectKey: '$(SONAR_PROJECT_KEY)'
         cliProjectName: '$(SONAR_PROJECT_NAME)'
 
     - task: SonarQubeAnalyze@6
-      displayName: Run SonarQube analysis
+      displayName: "SonarQube | Run analysis"
 
     - task: SonarQubePublish@6
-      displayName: Publish Sonar Quality Gate
+      displayName: "SonarQube | Publish Quality Gate"
       inputs:
         pollingTimeoutSec: '300'
-  # -------------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
 
-  # Build a release (optional, quick)
   - script: |
       set -euo pipefail
-      swift build -c release
-    displayName: Build release (optional)
-    condition: succeeded()
+      echo "Building package in release mode…"
+      swift build -c "$(CONFIG)"
+    displayName: "Build package (release)"
+    condition: succeeded()   # only if tests passed
 
-  # Package source artifact (only if tests passed)
   - script: |
       set -euo pipefail
-      rm -rf dist
-      mkdir -p dist/pkg
+      echo "Packaging source artifact…"
+      rm -rf dist && mkdir -p dist/pkg
 
-      # Include manifest + sources + docs + (optional) coverage
       cp -a Package.swift dist/pkg/
       [ -f Package.resolved ] && cp Package.resolved dist/pkg/ || true
       [ -d Sources ] && cp -a Sources dist/pkg/ || true
@@ -111,19 +109,19 @@ steps:
       [ -f LICENSE ] && cp LICENSE dist/pkg/ || true
       [ -f coverage.lcov ] && cp coverage.lcov dist/pkg/ || true
 
-      # Short commit hash for filename
       SHORT="${BUILD_SOURCEVERSION:0:7}"
+      BRANCH="${BUILD_SOURCEBRANCHNAME//\//-}"
       pushd dist >/dev/null
-      zip -r "authpackage-src-${SHORT}.zip" pkg >/dev/null
+      zip -rq "AuthPackage_src_${BRANCH}_${SHORT}.zip" pkg
       popd >/dev/null
 
-      echo "Created dist/authpackage-src-${SHORT}.zip"
-    displayName: Create package source artifact
+      echo "Created dist/AuthPackage_src_${BRANCH}_${SHORT}.zip"
+    displayName: "Create source artifact (.zip)"
     condition: succeeded()
 
   - task: PublishPipelineArtifact@1
-    displayName: Publish package artifact
+    displayName: "Publish artifact: AuthPackage (source zip)"
     condition: succeeded()
     inputs:
       targetPath: 'dist'
-      artifact: 'authpackage'
+      artifact: 'AuthPackage'
