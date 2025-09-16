@@ -14,7 +14,7 @@ pool:
 
 variables:
   CONFIG: debug
-  SONAR_ENABLED: 'false'            # reserved for later
+  SONAR_ENABLED: 'false'
   SONARQ_ENDPOINT: 'sonarqube-authpackage'
   SONAR_PROJECT_KEY: 'authpackage'
   SONAR_PROJECT_NAME: 'authpackage'
@@ -44,6 +44,7 @@ steps:
       echo "Running SwiftPM tests with coverage…"
       swift test --enable-code-coverage
 
+      # Modern way to find coverage/profile
       if swift test --show-codecov-path >/dev/null 2>&1; then
         CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
         PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
@@ -52,6 +53,7 @@ steps:
         PROF=".build/debug/codecov/default.profdata"
       fi
 
+      # Test runner binary for llvm-cov
       if swift test --show-test-binary-path >/dev/null 2>&1; then
         TEST_BIN=$(swift test --show-test-binary-path)
       else
@@ -61,24 +63,66 @@ steps:
       echo "Profile: $PROF"
       echo "Test binary: $TEST_BIN"
 
+      # Produce lcov so Sonar is plug-and-play later
       xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
+    displayName: Build & Test (SwiftPM) + generate coverage
 
-      mkdir -p coverage-html
-      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" \
-        -format=html -output-dir coverage-html \
-        -ignore-filename-regex="(.*/Tests/.*)|(.*/Sources/AuthPackageUI/.*)"
-    displayName: Build & Test + Generate coverage (LCOV + HTML)
-
-  - task: PublishBuildArtifacts@1
-    displayName: Upload coverage.lcov
-    condition: succeededOrFailed()
+  # ---- SonarQube (disabled until SONAR_ENABLED == 'true') ----
+  - task: SonarQubePrepare@6
+    displayName: Prepare SonarQube
+    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
     inputs:
-      pathToPublish: '$(Build.SourcesDirectory)/coverage.lcov'
-      artifactName: coverage-lcov
+      SonarQube: '$(SONARQ_ENDPOINT)'
+      scannerMode: 'CLI'
+      configMode: 'file'                   
+      cliProjectKey: '$(SONAR_PROJECT_KEY)'
+      cliProjectName: '$(SONAR_PROJECT_NAME)'
 
-  - task: PublishBuildArtifacts@1
-    displayName: Upload coverage HTML
-    condition: succeededOrFailed()
+  - task: SonarQubeAnalyze@6
+    displayName: Run SonarQube analysis
+    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
+
+  - task: SonarQubePublish@6
+    displayName: Publish Sonar Quality Gate
+    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
     inputs:
-      pathToPublish: '$(Build.SourcesDirectory)/coverage-html'
-      artifactName: coverage-html
+      pollingTimeoutSec: '300'
+  # ------------------------------------------------------------
+
+  # Build a release (optional, fast; artifact is source-based for portability)
+  - script: |
+      set -euo pipefail
+      swift build -c release
+    displayName: Build release (optional)
+    condition: succeeded()
+
+  # Package *source* artifact so downstream consumers can pull this exact version
+  - script: |
+      set -euo pipefail
+      rm -rf dist
+      mkdir -p dist/pkg
+
+      # include canonical source + manifest + docs
+      cp -a Package.swift dist/pkg/
+      [ -f Package.resolved ] && cp Package.resolved dist/pkg/ || true
+      [ -d Sources ] && cp -a Sources dist/pkg/ || true
+      [ -f README.md ] && cp README.md dist/pkg/ || true
+      [ -f LICENSE ] && cp LICENSE dist/pkg/ || true
+
+      # keep coverage for future code-quality stages (optional)
+      [ -f coverage.lcov ] && cp coverage.lcov dist/pkg/ || true
+
+      pushd dist >/dev/null
+      zip -r "authpackage-src-$(Build.SourceVersionShortHash).zip" pkg >/dev/null
+      popd >/dev/null
+
+      echo "Created dist/authpackage-src-$(Build.SourceVersionShortHash).zip"
+    displayName: Create package source artifact
+    condition: succeeded()
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish package artifact
+    condition: succeeded()
+    inputs:
+      targetPath: 'dist'
+      artifact: 'authpackage'
