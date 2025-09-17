@@ -5,7 +5,11 @@
 //  Created by Zaid MOUMNI on 10/09/2025.
 //
 
-public enum SocialProvider: String, Sendable { case microsoft }
+public enum SocialProvider: String, Sendable {
+    case microsoft
+    case google
+    case facebook
+}
 
 /// Credential produced by build-in-web OAuth or by host app (MSAL)
 public struct SocialCredential: Sendable {
