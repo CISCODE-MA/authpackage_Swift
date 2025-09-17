@@ -5,10 +5,8 @@
 //  Created by Zaid MOUMNI on 12/09/2025.
 //
 #if os(iOS)
-
     import AuthenticationServices
     import SwiftUI
-
     #if canImport(UIKit)
         import UIKit
     #endif
@@ -16,15 +14,11 @@
     public struct LoginView: View {
         @Environment(\.authUIStyle) private var style
         @EnvironmentObject private var router: AuthUIRouter
-
-        // Use the SAME view model as the parent (AuthFlowView)
         @ObservedObject private var vm: AuthViewModel
 
-        // capture a window anchor for ASWebAuthenticationSession (if you enable Microsoft)
         @State private var anchorWindow: ASPresentationAnchor?
         @State private var showErrorAlert = false
 
-        // Public init expected by AuthFlowView: LoginView(vm: vm)
         public init(vm: AuthViewModel) {
             self._vm = ObservedObject(initialValue: vm)
         }
@@ -63,6 +57,7 @@
                         vm.email.isEmpty || vm.password.isEmpty || vm.isLoading
                     )
 
+                    // Microsoft
                     if router.config.microsoftEnabled {
                         Button {
                             Task { @MainActor in
@@ -84,6 +79,50 @@
                         .buttonStyle(.bordered)
                     }
 
+                    // Google (NEW)
+                    if router.config.googleEnabled {
+                        Button {
+                            Task { @MainActor in
+                                let anchor = anchorWindow ?? keyWindow()
+                                if let anchor {
+                                    await vm.loginWithGoogle(anchor: anchor)
+                                } else {
+                                    vm.errorMessage =
+                                        "Unable to present Google sign-in (no window anchor)."
+                                    showErrorAlert = true
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "g.circle")
+                                Text("Sign in with Google")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    // Facebook (NEW)
+                    if router.config.facebookEnabled {
+                        Button {
+                            Task { @MainActor in
+                                let anchor = anchorWindow ?? keyWindow()
+                                if let anchor {
+                                    await vm.loginWithFacebook(anchor: anchor)
+                                } else {
+                                    vm.errorMessage =
+                                        "Unable to present Facebook sign-in (no window anchor)."
+                                    showErrorAlert = true
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "f.cursive.circle")
+                                Text("Sign in with Facebook")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
                     NavigationLink(destination: PasswordResetRequestView()) {
                         Text("Forgot password?")
                     }
@@ -96,21 +135,18 @@
                 NavigationLink(destination: PasswordResetRequestView()) {
                     Text("Forgot password?")
                 }
-
                 NavigationLink(destination: RegistrationView(vm: vm)) {
                     Text("Don’t have an account? Create one")
                 }
             }
             .foregroundStyle(style.colors.text)
             .navigationTitle("")
-            // capture a window anchor for ASWebAuthenticationSession
             .background(WindowReader(anchor: $anchorWindow))
             .alert("Login failed", isPresented: $showErrorAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(vm.errorMessage ?? "Unknown error")
             }
-
         }
     }
 
