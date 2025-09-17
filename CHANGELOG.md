@@ -17,6 +17,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Security
 - …
 
+## [1.4.0] – 2025-09-17
+### Added
+- Google OAuth 
+- Facebook OAuth
+- Update UI/UX 
+
+
 ## [1.2.0] – 2025-09-15
 ### Added
 - Interactive ready-to-use UI (customizable)
