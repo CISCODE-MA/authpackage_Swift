@@ -126,3 +126,16 @@ steps:
     inputs:
       targetPath: 'dist'
       artifact: 'AuthPackage'
+      
+  - task: UniversalPackages@0
+    displayName: "Artifacts feed: publish Universal Package"
+    condition: succeeded()   # only if tests passed
+    inputs:
+      command: publish
+      publishDirectory: 'dist/pkg'         # folder you created above
+      feedsToUse: internal
+      vstsFeedPublish: 'ios-packages'      # <-- your feed name (change if different)
+      vstsFeedPackagePublish: 'authpackage'
+      versionOption: custom
+      versionPublish: '1.0.0-$(Date:yyyyMMdd).$(Rev:r)'   # valid SemVer pre-release
+      packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
