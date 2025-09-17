@@ -47,14 +47,18 @@ public final class TokenService: TokenServicing {
     }
 
     public func logout() async throws {
-        _ =
-            try await net.send(
+        // Try to tell the server, but regardless of what happens we clear local tokens.
+        do {
+            _ = try await net.send(
                 baseURL: config.baseURL,
                 path: Endpoints.logout,
                 method: .POST,
                 headers: [:],
                 body: nil
             ) as EmptyResponse
+        } catch {
+            // Swallow server errors intentionally; local logout must still proceed.
+        }
         try? tokens.clear()
     }
 
