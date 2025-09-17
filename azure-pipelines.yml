@@ -129,13 +129,13 @@ steps:
       
   - task: UniversalPackages@0
     displayName: "Artifacts feed: publish Universal Package"
-    condition: succeeded()   # only if tests passed
+    condition: succeeded()
     inputs:
       command: publish
-      publishDirectory: 'dist/pkg'         # folder you created above
+      publishDirectory: 'dist/pkg'
       feedsToUse: internal
-      vstsFeedPublish: 'ios-packages'      # <-- your feed name (change if different)
+      vstsFeedPublish: '$(System.TeamProject)/ios-packages'   # <— key change
       vstsFeedPackagePublish: 'authpackage'
       versionOption: custom
-      versionPublish: '1.0.0-$(Date:yyyyMMdd).$(Rev:r)'   # valid SemVer pre-release
+      versionPublish: '1.0.0-$(Date:yyyyMMdd).$(Rev:r)'
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
