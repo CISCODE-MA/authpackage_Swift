@@ -170,15 +170,15 @@ steps:
       artifact: 'AuthPackage'
 
   # -------- publish to Azure Artifacts feed (Universal Package) --------
-   - task: UniversalPackages@0
-     displayName: "Artifacts feed: publish Universal Package v$(PACKAGE_VERSION)"
-     condition: succeeded()
-     inputs:
-       command: publish
-       publishDirectory: 'dist/pkg'
-       feedsToUse: internal
-       vstsFeedPublish: '$(FEED_PATH)'
-       vstsFeedPackagePublish: '$(PACKAGE_NAME)'
-       versionOption: custom
-       versionPublish: '$(PACKAGE_VERSION)'
-       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
+  - task: UniversalPackages@0
+    displayName: "Artifacts feed: publish Universal Package v$(PACKAGE_VERSION)"
+    condition: succeeded()
+    inputs:
+      command: publish
+      publishDirectory: 'dist/pkg'
+      feedsToUse: internal
+      vstsFeedPublish: '$(FEED_PATH)'
+      vstsFeedPackagePublish: '$(PACKAGE_NAME)'
+      versionOption: custom
+      versionPublish: '$(PACKAGE_VERSION)'
+      packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
