@@ -18,10 +18,9 @@
     // MARK: - Actor that owns the client and performs all calls on its executor
     private actor AuthWorker {
         private let clientBox: UnsafeSendableClient
-
         init(clientBox: UnsafeSendableClient) { self.clientBox = clientBox }
 
-        // STATE (no suspension)
+        // STATE
         func hasAccessToken() -> Bool {
             (clientBox.value.tokens?.accessToken.isEmpty == false)
         }
@@ -31,14 +30,11 @@
         func login(email: String, password: String) async throws -> JWTClaims? {
             try await clientBox.value.login(email: email, password: password)
         }
-
         func logout() async throws {
-            try await clientBox.value.logout()  // server logout + local clear (core)
+            try await clientBox.value.logout()  // server logout + local clear
         }
-
         func register(email: String, password: String, name: String?)
-            async throws
-            -> User
+            async throws -> User
         {
             try await clientBox.value.register(
                 email: email,
@@ -47,8 +43,6 @@
                 roles: nil
             )
         }
-
-        // PASSWORD RESET
         func requestPasswordReset(email: String, type: String) async throws
             -> String?
         {
@@ -57,7 +51,6 @@
                 type: type
             )
         }
-
         func resetPassword(token: String, newPassword: String) async throws
             -> String?
         {
@@ -67,12 +60,26 @@
             )
         }
 
-        // OAUTH — core API is @MainActor; call it on main actor
-        @MainActor
-        func loginWithMicrosoft(from anchor: ASPresentationAnchor) async throws
-            -> JWTClaims?
+        // OAUTH — MainActor entry points
+        @MainActor func loginWithMicrosoft(from anchor: ASPresentationAnchor)
+            async throws -> JWTClaims?
         {
             try await clientBox.value.loginWithMicrosoft(from: anchor)
+        }
+        @MainActor func loginWithGoogle(from anchor: ASPresentationAnchor)
+            async throws -> JWTClaims?
+        {  // NEW
+            // This compiles once core’s AuthClient exposes loginWithGoogle
+            try await (clientBox.value as! AuthClient).loginWithGoogle(
+                from: anchor
+            )
+        }
+        @MainActor func loginWithFacebook(from anchor: ASPresentationAnchor)
+            async throws -> JWTClaims?
+        {  // NEW
+            try await (clientBox.value as! AuthClient).loginWithFacebook(
+                from: anchor
+            )
         }
     }
 
@@ -283,6 +290,44 @@
             defer { isLoading = false }
             do {
                 _ = try await worker.loginWithMicrosoft(from: anchor)
+                self.isAuthenticated = true
+                updateDisplayNameFromAccessToken()
+                showSuccess("Welcome\(displayName.map { ", \($0)" } ?? "")!")
+                refreshAuthState()
+            } catch {
+                let msg = userMessage(for: error)
+                errorMessage = msg
+                showErrorNotice(msg)
+            }
+        }
+
+        // MARK: Google
+        public func loginWithGoogle(anchor: ASPresentationAnchor) async {
+            guard router.config.googleEnabled else { return }
+            errorMessage = nil
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                _ = try await worker.loginWithGoogle(from: anchor)
+                self.isAuthenticated = true
+                updateDisplayNameFromAccessToken()
+                showSuccess("Welcome\(displayName.map { ", \($0)" } ?? "")!")
+                refreshAuthState()
+            } catch {
+                let msg = userMessage(for: error)
+                errorMessage = msg
+                showErrorNotice(msg)
+            }
+        }
+
+        // MARK: Facebook
+        public func loginWithFacebook(anchor: ASPresentationAnchor) async {
+            guard router.config.facebookEnabled else { return }
+            errorMessage = nil
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                _ = try await worker.loginWithFacebook(from: anchor)
                 self.isAuthenticated = true
                 updateDisplayNameFromAccessToken()
                 showSuccess("Welcome\(displayName.map { ", \($0)" } ?? "")!")
