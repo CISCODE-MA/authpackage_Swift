@@ -332,4 +332,4 @@ struct AuthDemoApp: App {
 
 ---
 
-© Your Organization — Internal use.
+MIT License © 2025 Zaiid MOUMNI.
