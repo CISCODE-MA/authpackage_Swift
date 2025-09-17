@@ -112,6 +112,49 @@ steps:
       xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
       echo "Wrote coverage.lcov"
     displayName: "Build & test (with coverage)"
+    
+# Convert LCOV to Cobertura XML for Azure DevOps UI
+  - script: |
+      set -euo pipefail
+      python3 -m pip install --user lcov_cobertura
+      python3 -m lcov_cobertura coverage.lcov --output coverage.cobertura.xml
+      echo "Wrote coverage.cobertura.xml"
+    displayName: "Convert coverage: LCOV → Cobertura XML"
+
+# Publish to the Code Coverage tab
+  - task: PublishCodeCoverageResults@2
+    displayName: "Publish code coverage (Cobertura)"
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: 'coverage.cobertura.xml'
+      failIfCoverageEmpty: false
+      
+  - script: |
+      set -euo pipefail
+      mkdir -p coverage-html
+      # You already found $PROF and $TEST_BIN above — reuse the logic or recompute here if needed
+      if swift test --show-codecov-path >/dev/null 2>&1; then
+        CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
+        PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
+        PROF="$PROF_DIR/default.profdata"
+      else
+        PROF=".build/debug/codecov/default.profdata"
+      fi
+      if swift test --show-test-binary-path >/dev/null 2>&1; then
+        TEST_BIN=$(swift test --show-test-binary-path)
+      else
+        TEST_BIN=$(find .build -type f -name '*Tests' -perm -111 2>/dev/null | head -n1)
+      fi
+      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" \
+        -format=html -output-dir coverage-html
+    displayName: "Generate HTML coverage (optional)"
+
+  - task: PublishPipelineArtifact@1
+    displayName: "Publish coverage HTML (optional)"
+    inputs:
+      targetPath: 'coverage-html'
+      artifact: 'coverage-html'
+    condition: succeededOrFailed()
 
   # ---- SonarQube block stays excluded while SONAR_ENABLED == 'false' ----
   - ${{ if eq(variables.SONAR_ENABLED, 'true') }}:
