@@ -15,7 +15,7 @@ enum Endpoints {
     // Registration (clients)
     static let registerClient = "/api/auth/clients/register"
 
-    // Users (keep if you still use them elsewhere)
+    // Users (optional legacy)
     static let registerUser = "/api/users"
     static let inviteUser = "/api/users/invite"
 
@@ -25,4 +25,12 @@ enum Endpoints {
 
     // Microsoft OAuth
     static let microsoft = "/api/auth/microsoft"
+
+    // Google OAuth
+    static let google = "/api/auth/google"
+    static let googleClient = "/api/auth/client/google"
+
+    // Facebook OAuth
+    static let facebook = "/api/auth/facebook"
+    static let facebookClient = "/api/auth/client/facebook"
 }

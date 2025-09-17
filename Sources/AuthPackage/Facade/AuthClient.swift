@@ -2,8 +2,6 @@
 //  AuthClient.swift
 //  AuthPackage
 //
-//  Created by Zaid MOUMNI on 08/09/2025.
-//
 
 import AuthenticationServices
 import Foundation
@@ -23,14 +21,18 @@ public protocol AuthClientProtocol {
     ) async throws -> User
 
     // Password reset
-    func requestPasswordReset(email: String, type: String) async throws -> String?
+    func requestPasswordReset(email: String, type: String) async throws
+        -> String?
     func resetPassword(token: String, newPassword: String) async throws
         -> String?
 
-    // OAuth (Microsoft through backend)
-    @MainActor
-    func loginWithMicrosoft(from anchor: ASPresentationAnchor) async throws
-        -> JWTClaims?
+    // OAuth (backend redirect → app scheme)
+    @MainActor func loginWithMicrosoft(from anchor: ASPresentationAnchor)
+        async throws -> JWTClaims?
+    @MainActor func loginWithGoogle(from anchor: ASPresentationAnchor)
+        async throws -> JWTClaims?
+    @MainActor func loginWithFacebook(from anchor: ASPresentationAnchor)
+        async throws -> JWTClaims?
 
     // State
     var currentUser: User? { get }
@@ -132,7 +134,9 @@ public final class AuthClient: AuthClientProtocol {
     }
 
     // MARK: - Password reset
-    public func requestPasswordReset(email: String, type: String) async throws -> String? {
+    public func requestPasswordReset(email: String, type: String) async throws
+        -> String?
+    {
         try await resetService.requestReset(email: email, type: type)
     }
 
@@ -142,7 +146,7 @@ public final class AuthClient: AuthClientProtocol {
         try await resetService.reset(token: token, newPassword: newPassword)
     }
 
-    // MARK: - OAuth (Microsoft via backend redirect → app scheme)
+    // MARK: - OAuth (backend redirect → app scheme)
     @MainActor
     public func loginWithMicrosoft(from anchor: ASPresentationAnchor)
         async throws -> JWTClaims?
@@ -152,7 +156,33 @@ public final class AuthClient: AuthClientProtocol {
             config: config,
             tokenStore: tokenStore
         )
-        let t = try await oauth.signInMicrosoft(from: anchor)  // runs on main actor
+        let t = try await oauth.signInMicrosoft(from: anchor)
+        return JWTDecoder.decode(t.accessToken)
+    }
+
+    @MainActor
+    public func loginWithGoogle(from anchor: ASPresentationAnchor) async throws
+        -> JWTClaims?
+    {
+        guard config.googleEnabled else { throw APIError.unknown }
+        let oauth = OAuthWebAuthenticator(
+            config: config,
+            tokenStore: tokenStore
+        )
+        let t = try await oauth.signInGoogle(from: anchor)
+        return JWTDecoder.decode(t.accessToken)
+    }
+
+    @MainActor
+    public func loginWithFacebook(from anchor: ASPresentationAnchor)
+        async throws -> JWTClaims?
+    {
+        guard config.facebookEnabled else { throw APIError.unknown }
+        let oauth = OAuthWebAuthenticator(
+            config: config,
+            tokenStore: tokenStore
+        )
+        let t = try await oauth.signInFacebook(from: anchor)
         return JWTDecoder.decode(t.accessToken)
     }
 }

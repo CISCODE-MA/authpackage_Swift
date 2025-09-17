@@ -14,17 +14,23 @@ public struct AuthConfiguration: Sendable {
     public let redirectScheme: String?
     /// Feature flags
     public let microsoftEnabled: Bool
+    public let googleEnabled: Bool
+    public let facebookEnabled: Bool
 
     public init(
         baseURL: URL,
         refreshUsesCookie: Bool = true,
         redirectScheme: String? = nil,
-        microsoftEnabled: Bool = false
+        microsoftEnabled: Bool = false,
+        googleEnabled: Bool = false,
+        facebookEnabled: Bool = false
     ) {
         self.baseURL = baseURL
         self.refreshUsesCookie = refreshUsesCookie
         self.redirectScheme = redirectScheme
         self.microsoftEnabled = microsoftEnabled
+        self.googleEnabled = googleEnabled
+        self.facebookEnabled = facebookEnabled
     }
 }
 
