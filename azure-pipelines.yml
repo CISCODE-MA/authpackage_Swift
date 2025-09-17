@@ -27,6 +27,11 @@ variables:
   SONARQ_ENDPOINT: 'sonarqube-authpackage'
   SONAR_PROJECT_KEY: 'authpackage'
   SONAR_PROJECT_NAME: 'AuthPackage'
+  
+  # Azure Artifacts feed
+  FEED_NAME: 'ios-packages'
+  PACKAGE_NAME: 'authpackage'
+  PACKAGE_VERSION: '1.0.0-rc.$(Build.BuildId)'
 
 steps:
   - checkout: self
@@ -137,5 +142,5 @@ steps:
       vstsFeedPublish: '$(System.TeamProject)/ios-packages'   # <— key change
       vstsFeedPackagePublish: 'authpackage'
       versionOption: custom
-      versionPublish: '1.0.0-$(Date:yyyyMMdd).$(Rev:r)'
+      versionPublish: '$(PACKAGE_VERSION)'
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
