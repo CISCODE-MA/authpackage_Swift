@@ -2,6 +2,7 @@
 # AuthPackage – CI (release branch)
 # -------------------------------
 
+# Human-friendly run name:
 name: authpkg_release_$(Date:yyyyMMdd).$(Rev:r)
 
 trigger:
@@ -27,10 +28,52 @@ variables:
   SONAR_PROJECT_KEY: 'authpackage'
   SONAR_PROJECT_NAME: 'AuthPackage'
 
+  # ---- Azure Artifacts feed (only needed if/when you publish to feed) ----
+  FEED_PATH: '$(System.TeamProject)/ios-packages'   # Project-scoped feed path (ProjectName/FeedName)
+  PACKAGE_NAME: 'authpackage'
+  
+  # Will be overridden by the "Resolve package version" step
+  PACKAGE_VERSION: '0.0.0-rc.0'
+
 steps:
   - checkout: self
     fetchDepth: 0
     displayName: "Checkout repository"
+
+  # Compute SemVer:
+  # - If building a tag 'vX.Y.Z' => version 'X.Y.Z'
+  # - Else on 'release' branch   => 'NEXT_MINOR.0-rc.YYYYMMDD.BUILDID'
+  - script: |
+      set -euo pipefail
+
+      REF="${BUILD_SOURCEBRANCH}"
+
+      # Helper: parse last tag safely
+      get_last_tag() {
+        git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true
+      }
+
+      if [[ "$REF" == refs/tags/v* ]]; then
+        VER="${REF#refs/tags/v}"
+        CHANNEL="stable"
+      else
+        LAST_TAG="$(get_last_tag)"
+        if [[ -z "$LAST_TAG" ]]; then
+          MAJ=0; MIN=0; PAT=0
+        else
+          BASE="${LAST_TAG#v}"
+          IFS=. read -r MAJ MIN PAT <<< "$BASE"
+        fi
+        NEXT="${MAJ}.$((MIN+1)).0"
+        DATE="$(date +%Y%m%d)"
+        VER="${NEXT}-rc.${DATE}.${BUILD_BUILDID}"
+        CHANNEL="rc"
+      fi
+
+      echo "Resolved PACKAGE_VERSION=$VER (channel=$CHANNEL)"
+      echo "##vso[task.setvariable variable=PACKAGE_VERSION]$VER"
+      echo "##vso[task.setvariable variable=RELEASE_CHANNEL]$CHANNEL"
+    displayName: "Resolve package version (SemVer + rc)"
 
   - script: |
       set -euo pipefail
@@ -65,19 +108,19 @@ steps:
       echo "Coverage profile: $PROF"
       echo "Test binary: $TEST_BIN"
 
-      # Produce LCOV so Sonar can ingest later
+      # Produce LCOV so Sonar (or others) can ingest later
       xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
       echo "Wrote coverage.lcov"
     displayName: "Build & test (with coverage)"
 
-  # ---- SonarQube (excluded at compile-time until SONAR_ENABLED == 'true') ----
+  # ---- SonarQube block stays excluded while SONAR_ENABLED == 'false' ----
   - ${{ if eq(variables.SONAR_ENABLED, 'true') }}:
     - task: SonarQubePrepare@6
       displayName: "SonarQube | Prepare analysis"
       inputs:
         SonarQube: '$(SONARQ_ENDPOINT)'
         scannerMode: 'CLI'
-        configMode: 'file'   # uses sonar-project.properties in repo
+        configMode: 'file'
         cliProjectKey: '$(SONAR_PROJECT_KEY)'
         cliProjectName: '$(SONAR_PROJECT_NAME)'
 
@@ -88,7 +131,7 @@ steps:
       displayName: "SonarQube | Publish Quality Gate"
       inputs:
         pollingTimeoutSec: '300'
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------
 
   - script: |
       set -euo pipefail
@@ -112,10 +155,10 @@ steps:
       SHORT="${BUILD_SOURCEVERSION:0:7}"
       BRANCH="${BUILD_SOURCEBRANCHNAME//\//-}"
       pushd dist >/dev/null
-      zip -rq "AuthPackage_src_${BRANCH}_${SHORT}.zip" pkg
+      zip -rq "AuthPackage_src_${BRANCH}_v$(PACKAGE_VERSION)_${SHORT}.zip" pkg
       popd >/dev/null
 
-      echo "Created dist/AuthPackage_src_${BRANCH}_${SHORT}.zip"
+      echo "Created dist/AuthPackage_src_${BRANCH}_v$(PACKAGE_VERSION)_${SHORT}.zip"
     displayName: "Create source artifact (.zip)"
     condition: succeeded()
 
@@ -125,3 +168,17 @@ steps:
     inputs:
       targetPath: 'dist'
       artifact: 'AuthPackage'
+
+  # -------- publish to Azure Artifacts feed (Universal Package) --------
+  - task: UniversalPackages@0
+    displayName: "Artifacts feed: publish Universal Package v$(PACKAGE_VERSION)"
+    condition: succeeded()
+    inputs:
+      command: publish
+      publishDirectory: 'dist/pkg'
+      feedsToUse: internal
+      vstsFeedPublish: '$(FEED_PATH)'
+      vstsFeedPackagePublish: '$(PACKAGE_NAME)'
+      versionOption: custom
+      versionPublish: '$(PACKAGE_VERSION)'
+      packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'

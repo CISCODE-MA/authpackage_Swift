@@ -1,22 +1,37 @@
 # Changelog
 
-## [1.0.0] ~ 2025-09-08
+All notable changes to this project will be documented in this file.
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-- Initial release: core auth flows (register, login + OTP, token refresh, logout), token store.
+## [Unreleased]
+### Added
+- …
+### Changed
+- …
+### Fixed
+- …
+### Deprecated
+- …
+### Removed
+- …
+### Security
+- …
 
-## [1.0.1] ~ 2025-09-09
+## [1.2.0] – 2025-09-15
+### Added
+- Interactive ready-to-use UI (customizable)
+- Enhanced AuthFlow for native & OAuth
+- Comprehensive README covering Swift integration
+### Fixed
+- Microsoft OAuth flow
 
-### FIXED 
-- Minor docs polish in README.
-### ADDED
-- Expanded test suites: Registration + Email Verify, Password Reset, Refresh , logout.
-- Improved `NetworkClientMock` utilities for types JSON stubs. 
+## [1.0.1] – 2025-09-09
+### Added
+- Expanded tests: Registration, Email Verify, Password Reset, Refresh, Logout
+- Improved `NetworkClientMock` for JSON stubs
+### Fixed
+- Minor README polish
 
-## [1.2.0] ~ 2025-09-15
-
-### FIXED 
-- Fixed Microsoft OAuth 
-### ADDED
-- Interactive ready-to-use user interfaces (With costumizable properties )
-- Enhanced The AuthFlow for native and Oauth authentications
-- Ultimate readme documentation, for easy to use examples and explanations, covering everything a swift developer would need to get started with the package  
+## [1.0.0] – 2025-09-08
+### Added
+- Initial release: register, login + OTP, token refresh, logout, token store
