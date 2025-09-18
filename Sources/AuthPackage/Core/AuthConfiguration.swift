@@ -16,6 +16,7 @@ public struct AuthConfiguration: Sendable {
     public let microsoftEnabled: Bool
     public let googleEnabled: Bool
     public let facebookEnabled: Bool
+    public let ephemeralWebSession: Bool
 
     public init(
         baseURL: URL,
@@ -23,7 +24,8 @@ public struct AuthConfiguration: Sendable {
         redirectScheme: String? = nil,
         microsoftEnabled: Bool = false,
         googleEnabled: Bool = false,
-        facebookEnabled: Bool = false
+        facebookEnabled: Bool = false,
+        ephemeralWebSession: Bool = true
     ) {
         self.baseURL = baseURL
         self.refreshUsesCookie = refreshUsesCookie
@@ -31,6 +33,7 @@ public struct AuthConfiguration: Sendable {
         self.microsoftEnabled = microsoftEnabled
         self.googleEnabled = googleEnabled
         self.facebookEnabled = facebookEnabled
+        self.ephemeralWebSession = ephemeralWebSession
     }
 }
 
