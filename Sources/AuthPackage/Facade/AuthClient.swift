@@ -114,7 +114,12 @@ public final class AuthClient: AuthClientProtocol {
     }
 
     public func logout() async throws {
-        try await tokenService.logout()
+        do {
+            try await tokenService.logout()
+        } catch {
+            // swallow so we still clear local tokens
+        }
+        try? tokenStore.clear()
         currentUser = nil
     }
 
