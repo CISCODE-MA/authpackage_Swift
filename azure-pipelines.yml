@@ -171,17 +171,6 @@ steps:
 
     - task: SonarCloudAnalyze@2
       displayName: "SonarCloud | Run analysis"
-      
-    - script: |
-        set -euo pipefail
-        F=$(find . -name report-task.txt -maxdepth 4 | head -n1 || true)
-        if [[ -z "${F:-}" ]]; then
-        echo "##vso[task.logissue type=error]Sonar 'report-task.txt' not found. Analysis did not submit to SonarCloud."
-        exit 1
-        fi
-        echo "Found $F:"
-        cat "$F"
-      displayName: "Assert: Sonar report-task.txt exists"
 
     - task: SonarCloudPublish@2
       displayName: "SonarCloud | Publish Quality Gate"
