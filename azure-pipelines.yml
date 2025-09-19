@@ -25,7 +25,7 @@ variables:
   # Sonar toggle (leave 'false' until the extension + service connection exist)
   SONAR_ENABLED: 'true'
   SONARQ_ENDPOINT: 'sonarqube-authpackage'
-  SONAR_ORG: "CISCODEAPPS"
+  SONAR_ORG: "ciscodeapps"
   SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
   SONAR_PROJECT_NAME: 'pkg-ios-auth'
 
