@@ -236,4 +236,4 @@ steps:
       vstsFeedPackagePublish: '$(PACKAGE_NAME)'
       versionOption: custom
       versionPublish: '$(PACKAGE_VERSION)'
-      packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)
+      packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
