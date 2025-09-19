@@ -74,31 +74,34 @@ final class AuthClientTests: XCTestCase {
     }
 
     func
-        test_refreshIfNeeded_returns_cached_when_not_expired_and_no_network_call()
+        test_refreshIfNeeded_refreshes_even_with_existing_token_and_updates_store()
         async throws
     {
         let mock = MockNetworkClient()
-        mock.responder = { _, _, _, _, _ in
-            XCTFail("Network must NOT be called when token is fresh")
-            return [:]
-        }
         let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
         let store = InMemoryTokenStore()
         try store.save(
             .init(
-                accessToken: "CACHED",
+                accessToken: "OLD",
                 refreshToken: "R",
                 expiry: Date().addingTimeInterval(3600)
             )
         )
+
+        mock.responder = { _, path, _, _, _ in
+            XCTAssertEqual(path, Endpoints.refresh)  // should delegate to /refresh-token
+            return ["accessToken": "NEW"]
+        }
 
         let client = AuthClient(
             config: cfg,
             networkClient: mock,
             tokenStore: store
         )
-        let token = try await client.refreshIfNeeded()
-        XCTAssertEqual(token, "CACHED")
+        let access = try await client.refreshIfNeeded()
+        XCTAssertEqual(access, "NEW")
+        XCTAssertEqual(try store.load()?.accessToken, "NEW")
+        XCTAssertEqual(try store.load()?.refreshToken, "R")
     }
 
     func test_login_propagates_error_and_does_not_save_tokens() async {
