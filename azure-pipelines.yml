@@ -142,6 +142,7 @@ steps:
     inputs:
       codeCoverageTool: Cobertura
       summaryFileLocation: 'coverage.cobertura.xml'
+      reportDirectory: 'coverage-html'
       failIfCoverageEmpty: false
 
   # Generate HTML coverage (optional)

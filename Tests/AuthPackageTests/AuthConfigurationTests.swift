@@ -23,4 +23,35 @@ final class AuthConfigurationTests: XCTestCase {
         XCTAssertEqual(cfg.redirectScheme, "authdemo")
         XCTAssertTrue(cfg.microsoftEnabled)
     }
+    
+    func test_defaults_are_correct() {
+        let base = URL(string: "http://unit.test")!
+        let cfg = AuthConfiguration(baseURL: base) // rely on all defaults
+
+        XCTAssertEqual(cfg.baseURL, base)
+        XCTAssertTrue(cfg.refreshUsesCookie)           // default true
+        XCTAssertNil(cfg.redirectScheme)               // default nil
+        XCTAssertFalse(cfg.microsoftEnabled)           // default false
+        XCTAssertFalse(cfg.googleEnabled)              // default false
+        XCTAssertFalse(cfg.facebookEnabled)            // default false
+        XCTAssertTrue(cfg.ephemeralWebSession)         // default true
+    }
+
+    func test_microsoftConfig_defaults_and_fields() {
+        let m = MicrosoftConfig(
+            tenant: "common",
+            clientID: "client",
+            redirectScheme: "authdemo",
+            redirectURI: "authdemo://cb"
+            // rely on defaults for enabled/scopes/useBuiltInWebOAuth/microsoftEnabled
+        )
+        XCTAssertTrue(m.enabled)                       // default true
+        XCTAssertEqual(m.tenant, "common")
+        XCTAssertEqual(m.clientID, "client")
+        XCTAssertEqual(m.redirectScheme, "authdemo")
+        XCTAssertEqual(m.redirectURI, "authdemo://cb")
+        XCTAssertEqual(m.scopes, ["openid","email","profile","offline_access"]) // default
+        XCTAssertTrue(m.useBuiltInWebOAuth)            // default true
+        XCTAssertTrue(m.microsoftEnabled)              // default true
+    }
 }
