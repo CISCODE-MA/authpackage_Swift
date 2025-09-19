@@ -39,12 +39,16 @@ variables:
 steps:
   - checkout: self
     fetchDepth: 0
+    persistCredentials: true
     displayName: "Checkout repository"
     
   - script: |
       set -euo pipefail 
-      git fetch --tags --force --prune 
-    displayName: "Fetch tags" 
+      git -c http.extraheader="AUTHORIZATION: bearer $(System.AccessToken)" \
+          fetch --tags --force -prune origin
+    env: 
+      System.AccessToken: $(System.AccessToken)
+    displayName: "Fetch tags (auth)" 
   
   # Compute SemVer:
   # - If building a tag 'vX.Y.Z' => version 'X.Y.Z'
@@ -164,7 +168,7 @@ steps:
     inputs:
       targetPath: 'coverage-html'
       artifact: 'coverage-html'
-    condition: succeededOrFailed()
+    condition: and(succeededOrFailed(), exists('coverage-html'))
 
   # ---- SonarQube Cloud block stays excluded while SONAR_ENABLED == 'false' ----
   - ${{ if eq(variables['SONAR_ENABLED'], 'true') }}:
