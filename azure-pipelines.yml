@@ -112,6 +112,8 @@ steps:
       # Produce LCOV so Sonar (or others) can ingest later
       xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
       echo "Wrote coverage.lcov"
+      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" > coverage.swift.txt
+      echo "Wrote coverage.swift.txt for SonarSwift"
     displayName: "Build & test (with coverage)"
     
 # Convert LCOV to Cobertura XML for Azure DevOps UI
