@@ -21,6 +21,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 - Google OAuth Flow 
 - The Entire postAuthentication flow
+### Added 
+- SonarQube Cloud Configuration for code coverage 
 
 ## [1.4.0] – 2025-09-17
 ### Added

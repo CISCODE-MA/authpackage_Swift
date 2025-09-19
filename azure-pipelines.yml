@@ -23,10 +23,10 @@ variables:
   CONFIG: release
 
   # Sonar toggle (leave 'false' until the extension + service connection exist)
-  SONAR_ENABLED: 'false'
+  SONAR_ENABLED: 'true'
   SONARQ_ENDPOINT: 'sonarqube-authpackage'
-  SONAR_PROJECT_KEY: 'authpackage'
-  SONAR_PROJECT_NAME: 'AuthPackage'
+  SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
+  SONAR_PROJECT_NAME: 'pkg-ios-auth'
 
   # ---- Azure Artifacts feed (only needed if/when you publish to feed) ----
   FEED_PATH: '$(System.TeamProject)/ios-packages'   # Project-scoped feed path (ProjectName/FeedName)
