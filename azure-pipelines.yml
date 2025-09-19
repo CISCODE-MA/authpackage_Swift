@@ -162,7 +162,7 @@ steps:
     - task: SonarCloudPrepare@2
       displayName: "SonarCloud | Prepare analysis"
       inputs:
-        SonarCloud: '$(SONARQ_ENDPOINT)'   # must match the service connection name
+        SonarCloud: '$(SONARQ_ENDPOINT)'
         organization: '$(SONAR_ORG)'
         scannerMode: 'CLI'
         configMode: 'file'
@@ -175,7 +175,7 @@ steps:
     - task: SonarCloudPublish@2
       displayName: "SonarCloud | Publish Quality Gate"
       inputs:
-        pollingTimeoutSec: '300'
+        pollingTimeoutSec: '600'
   # ----------------------------------------------------------------------
 
   - script: |
