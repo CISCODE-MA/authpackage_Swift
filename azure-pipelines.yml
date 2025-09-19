@@ -25,6 +25,7 @@ variables:
   # Sonar toggle (leave 'false' until the extension + service connection exist)
   SONAR_ENABLED: 'true'
   SONARQ_ENDPOINT: 'sonarqube-authpackage'
+  SONAR_ORG: "CISCODEAPPS"
   SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
   SONAR_PROJECT_NAME: 'pkg-ios-auth'
 
@@ -156,24 +157,25 @@ steps:
       artifact: 'coverage-html'
     condition: succeededOrFailed()
 
-  # ---- SonarQube block stays excluded while SONAR_ENABLED == 'false' ----
+  # ---- SonarQube Cloud block stays excluded while SONAR_ENABLED == 'false' ----
   - ${{ if eq(variables.SONAR_ENABLED, 'true') }}:
-    - task: SonarQubePrepare@6
-      displayName: "SonarQube | Prepare analysis"
-      inputs:
-        SonarQube: '$(SONARQ_ENDPOINT)'
-        scannerMode: 'CLI'
-        configMode: 'file'
-        cliProjectKey: '$(SONAR_PROJECT_KEY)'
-        cliProjectName: '$(SONAR_PROJECT_NAME)'
+  - task: SonarCloudPrepare@2
+    displayName: "SonarCloud | Prepare analysis"
+    inputs:
+      SonarCloud: '$(SONARQ_ENDPOINT)'   # must match the service connection name
+      organization: '$(SONAR_ORG)'
+      scannerMode: 'CLI'
+      configMode: 'file'
+      cliProjectKey: '$(SONAR_PROJECT_KEY)'
+      cliProjectName: '$(SONAR_PROJECT_NAME)'
 
-    - task: SonarQubeAnalyze@6
-      displayName: "SonarQube | Run analysis"
+  - task: SonarCloudAnalyze@2
+    displayName: "SonarCloud | Run analysis"
 
-    - task: SonarQubePublish@6
-      displayName: "SonarQube | Publish Quality Gate"
-      inputs:
-        pollingTimeoutSec: '300'
+  - task: SonarCloudPublish@2
+    displayName: "SonarCloud | Publish Quality Gate"
+    inputs:
+      pollingTimeoutSec: '300'
   # ----------------------------------------------------------------------
 
   - script: |
