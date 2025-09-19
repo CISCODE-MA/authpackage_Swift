@@ -25,7 +25,7 @@ variables:
   # SonarCloud
   SONAR_ENABLED: 'true'
   SONARQ_ENDPOINT: 'sonarcloud-authpackage'
-  SONAR_ORG: "ciscodeapps"                
+  SONAR_ORG: "ciscode"                
   SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
   SONAR_PROJECT_NAME: 'pkg-ios-auth'
 
