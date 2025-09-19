@@ -15,7 +15,7 @@ public protocol TokenStore {
 
 public final class InMemoryTokenStore: TokenStore {
     private var box: Tokens?
-    public init() {}
+    public init() {} //Empty Initializer
     public func save(_ tokens: Tokens) throws { box = tokens }
     public func load() throws -> Tokens? { box }
     public func clear() throws { box = nil }

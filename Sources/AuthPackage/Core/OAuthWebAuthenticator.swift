@@ -59,7 +59,7 @@ public final class OAuthWebAuthenticator: NSObject,
         comps?.path = providerPath
         comps?.queryItems = [
             URLQueryItem(name: "redirect", value: "\(scheme)://auth/callback"),
-            URLQueryItem(name: "prompt",   value: "select_account") 
+            URLQueryItem(name: "prompt", value: "select_account"),
         ]
         guard let startURL = comps?.url else { throw APIError.invalidURL }
 
@@ -103,7 +103,8 @@ public final class OAuthWebAuthenticator: NSObject,
             }
 
             session.presentationContextProvider = self
-            session.prefersEphemeralWebBrowserSession = config.ephemeralWebSession
+            session.prefersEphemeralWebBrowserSession =
+                config.ephemeralWebSession
 
             self.currentSession = session
             _ = session.start()
