@@ -140,4 +140,33 @@ final class URLSessionNetworkClientTests: XCTestCase {
         }
         URLProtocolStub.removeAll()
     }
+
+    func test_204_no_content_results_in_decoding_error_mapping() async {
+        struct Foo: Codable {}
+        let client = makeClient()
+        let base = URL(string: "http://unit.test")!
+        let path = "/no-content"
+        let url = URL(string: base.absoluteString + path)!
+
+        URLProtocolStub.set([
+            url: .init(statusCode: 204, headers: [:], body: Data())
+        ])
+
+        do {
+            let _: Foo = try await client.send(
+                baseURL: base,
+                path: path,
+                method: .GET,
+                headers: [:],
+                body: nil
+            )
+            XCTFail("Expected decoding/network mapping error")
+        } catch APIError.network {
+            // ok
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        URLProtocolStub.removeAll()
+    }
+
 }

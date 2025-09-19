@@ -5,8 +5,8 @@
 //  Created by Zaid MOUMNI on 16/09/2025.
 //
 
-
 import XCTest
+
 @testable import AuthPackage
 
 final class EndpointsTests: XCTestCase {
@@ -17,7 +17,10 @@ final class EndpointsTests: XCTestCase {
         XCTAssertEqual(Endpoints.registerClient, "/api/auth/clients/register")
         XCTAssertEqual(Endpoints.registerUser, "/api/users")
         XCTAssertEqual(Endpoints.inviteUser, "/api/users/invite")
-        XCTAssertEqual(Endpoints.requestPasswordReset, "/api/auth/forgot-password")
+        XCTAssertEqual(
+            Endpoints.requestPasswordReset,
+            "/api/auth/forgot-password"
+        )
         XCTAssertEqual(Endpoints.resetPassword, "/api/auth/reset-password")
         XCTAssertEqual(Endpoints.microsoft, "/api/auth/microsoft")
     }

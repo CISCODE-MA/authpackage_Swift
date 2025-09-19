@@ -93,4 +93,25 @@ final class RegistrationServiceTests: XCTestCase {
         )
         XCTAssertEqual(msg, "invited")
     }
+
+    func test_createUser_propagates_server_error() async {
+        let mock = MockNetworkClient()
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+
+        mock.responder = { _, _, _, _, _ in
+            throw APIError.network("400 Bad Request")
+        }
+
+        let svc = RegistrationService(config: cfg, net: mock)
+        do {
+            _ = try await svc.createUser(
+                email: "alpha@ex.com",
+                password: "Pass123!",
+                name: "Alpha",
+                roles: ["client"]  // <-- required
+            )
+            XCTFail("Expected error")
+        } catch { /* ok */  }
+    }
+
 }

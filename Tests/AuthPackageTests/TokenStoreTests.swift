@@ -28,4 +28,13 @@ final class TokenStoreTests: XCTestCase {
         XCTAssertEqual(loaded?.accessToken, "NEW")
         XCTAssertEqual(loaded?.refreshToken, "R2")
     }
+
+    func test_save_load_roundtrips_tokens_struct() throws {
+        let store = InMemoryTokenStore()
+        let exp = Date(timeIntervalSince1970: 1_700_000_000)
+        let tokens = Tokens(accessToken: "A", refreshToken: "R", expiry: exp)
+        try store.save(tokens)
+        XCTAssertEqual(try store.load(), tokens)  // covers expiry via Equatable
+    }
+
 }

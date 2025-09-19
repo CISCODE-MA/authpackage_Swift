@@ -5,19 +5,21 @@
 //  Created by Zaid MOUMNI on 16/09/2025.
 //
 
-
 import XCTest
+
 @testable import AuthPackage
 
 final class LoginServiceTests: XCTestCase {
 
     func test_login_sends_correct_request_and_saves_tokens() async throws {
         let mock = MockNetworkClient()
-        let config = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+        let config = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!
+        )
         let store = InMemoryTokenStore()
 
         mock.responder = { _, path, method, headers, body in
-            XCTAssertEqual(path, Endpoints.login) // "/api/auth/clients/login"
+            XCTAssertEqual(path, Endpoints.login)  // "/api/auth/clients/login"
             XCTAssertEqual(method, .POST)
             XCTAssertEqual(headers["Content-Type"], "application/json")
             XCTAssertEqual(body?["email"] as? String, "dev@ex.com")
@@ -35,10 +37,12 @@ final class LoginServiceTests: XCTestCase {
 
     func test_login_does_not_save_when_accessToken_missing() async throws {
         let mock = MockNetworkClient()
-        let config = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+        let config = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!
+        )
         let store = InMemoryTokenStore()
 
-        mock.responder = { _,_,_,_,_ in ["message":"invalid credentials"] }
+        mock.responder = { _, _, _, _, _ in ["message": "invalid credentials"] }
 
         let sut = LoginService(config: config, net: mock, tokens: store)
         let res = try await sut.login(email: "x@ex.com", password: "nope")
@@ -46,4 +50,22 @@ final class LoginServiceTests: XCTestCase {
         XCTAssertEqual(res.message, "invalid credentials")
         XCTAssertNil(try store.load())
     }
+
+    func test_login_throws_on_network_error_and_does_not_save_tokens() async {
+        let mock = MockNetworkClient()
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+        let store = InMemoryTokenStore()
+
+        mock.responder = { _, _, _, _, _ in
+            throw APIError.network("401 Unauthorized")
+        }
+
+        let sut = LoginService(config: cfg, net: mock, tokens: store)
+        do {
+            _ = try await sut.login(email: "x@ex.com", password: "nope")
+            XCTFail("Expected error")
+        } catch { /* ok */  }
+        XCTAssertNil(try? store.load())
+    }
+
 }
