@@ -22,35 +22,37 @@ variables:
   # Build mode for swift build (we build once more after tests)
   CONFIG: release
 
-  # Sonar toggle (leave 'false' until the extension + service connection exist)
+  # SonarCloud
   SONAR_ENABLED: 'true'
   SONARQ_ENDPOINT: 'sonarcloud-authpackage'
-  SONAR_ORG: "ciscode"
+  SONAR_ORG: "ciscodeapps"                
   SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
   SONAR_PROJECT_NAME: 'pkg-ios-auth'
 
-  # ---- Azure Artifacts feed (only needed if/when you publish to feed) ----
-  FEED_PATH: '$(System.TeamProject)/ios-packages'   # Project-scoped feed path (ProjectName/FeedName)
+  # Azure Artifacts feed (optional)
+  FEED_PATH: '$(System.TeamProject)/ios-packages'
   PACKAGE_NAME: 'authpackage'
-  
-  # Will be overridden by the "Resolve package version" step
+
+  # Will be overridden by version resolver
   PACKAGE_VERSION: '0.0.0-rc.0'
 
 steps:
+  # Ensure later git commands reuse OAuth token
   - checkout: self
     fetchDepth: 0
     persistCredentials: true
     displayName: "Checkout repository"
-    
+
+  # Authenticated tag fetch (so versioning sees all tags)
   - script: |
-      set -euo pipefail 
+      set -euo pipefail
       git -c http.extraheader="AUTHORIZATION: bearer $(System.AccessToken)" \
-          fetch --tags --force -prune origin
-    env: 
+          fetch --tags --force --prune origin
+    env:
       System.AccessToken: $(System.AccessToken)
-    displayName: "Fetch tags (auth)" 
-  
-  # Compute SemVer:
+    displayName: "Fetch tags (auth)"
+
+  # Resolve SemVer
   # - If building a tag 'vX.Y.Z' => version 'X.Y.Z'
   # - Else on 'release' branch   => 'NEXT_MINOR.0-rc.YYYYMMDD.BUILDID'
   - script: |
@@ -58,7 +60,7 @@ steps:
 
       REF="${BUILD_SOURCEBRANCH}"
 
-      # Helper: parse last tag safely
+      # Prefer describe; else fall back to highest vX.Y.Z in repo
       get_last_tag() {
         git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null \
         || git tag -l 'v[0-9]*' --sort=-v:refname | head -n1 \
@@ -106,7 +108,6 @@ steps:
         PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
         PROF="$PROF_DIR/default.profdata"
       else
-        # Fallback path used by SwiftPM
         PROF=".build/debug/codecov/default.profdata"
       fi
 
@@ -120,14 +121,14 @@ steps:
       echo "Coverage profile: $PROF"
       echo "Test binary: $TEST_BIN"
 
-      # Produce LCOV so Sonar (or others) can ingest later
+      # Produce LCOV (for DevOps UI) + Swift text (for Sonar)
       xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
       echo "Wrote coverage.lcov"
       xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" > coverage.swift.txt
       echo "Wrote coverage.swift.txt for SonarSwift"
     displayName: "Build & test (with coverage)"
-    
-# Convert LCOV to Cobertura XML for Azure DevOps UI
+
+  # Convert LCOV to Cobertura XML for Azure DevOps UI
   - script: |
       set -euo pipefail
       python3 -m pip install --user lcov_cobertura
@@ -135,18 +136,18 @@ steps:
       echo "Wrote coverage.cobertura.xml"
     displayName: "Convert coverage: LCOV → Cobertura XML"
 
-# Publish to the Code Coverage tab
+  # Publish to the Code Coverage tab
   - task: PublishCodeCoverageResults@2
     displayName: "Publish code coverage (Cobertura)"
     inputs:
       codeCoverageTool: Cobertura
       summaryFileLocation: 'coverage.cobertura.xml'
       failIfCoverageEmpty: false
-      
+
+  # Generate HTML coverage (optional)
   - script: |
       set -euo pipefail
       mkdir -p coverage-html
-      # You already found $PROF and $TEST_BIN above — reuse the logic or recompute here if needed
       if swift test --show-codecov-path >/dev/null 2>&1; then
         CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
         PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
@@ -159,20 +160,29 @@ steps:
       else
         TEST_BIN=$(find .build -type f -name '*Tests' -perm -111 2>/dev/null | head -n1)
       fi
-      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" \
-        -format=html -output-dir coverage-html
+      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" -format=html -output-dir coverage-html
     displayName: "Generate HTML coverage (optional)"
+
+  # Only publish HTML if the folder exists (Azure conditions don't support exists())
+  - script: |
+      if [ -d coverage-html ]; then
+        echo "##vso[task.setvariable variable=PUBLISH_HTML]true"
+        echo "coverage-html exists, will publish."
+      else
+        echo "coverage-html is missing, skipping publish."
+      fi
+    displayName: "Check coverage-html existence"
 
   - task: PublishPipelineArtifact@1
     displayName: "Publish coverage HTML (optional)"
+    condition: and(succeededOrFailed(), eq(variables['PUBLISH_HTML'], 'true'))
     inputs:
       targetPath: 'coverage-html'
       artifact: 'coverage-html'
-    condition: and(succeededOrFailed(), exists('coverage-html'))
 
-  # ---- SonarQube Cloud block stays excluded while SONAR_ENABLED == 'false' ----
+  # ---- SonarCloud (v3 tasks) ----
   - ${{ if eq(variables['SONAR_ENABLED'], 'true') }}:
-    - task: SonarCloudPrepare@2
+    - task: SonarCloudPrepare@3
       displayName: "SonarCloud | Prepare analysis"
       inputs:
         SonarCloud: '$(SONARQ_ENDPOINT)'
@@ -181,23 +191,26 @@ steps:
         configMode: 'file'
         cliProjectKey: '$(SONAR_PROJECT_KEY)'
         cliProjectName: '$(SONAR_PROJECT_NAME)'
+        extraProperties: |
+          sonar.branch.name=$(Build.SourceBranchName)
+          sonar.scm.revision=$(Build.SourceVersion)
 
-    - task: SonarCloudAnalyze@2
+    - task: SonarCloudAnalyze@3
       displayName: "SonarCloud | Run analysis"
 
-    - task: SonarCloudPublish@2
+    - task: SonarCloudPublish@3
       displayName: "SonarCloud | Publish Quality Gate"
       condition: succeeded()
       inputs:
         pollingTimeoutSec: '600'
-  # ----------------------------------------------------------------------
+  # -------------------------------
 
   - script: |
       set -euo pipefail
       echo "Building package in release mode…"
       swift build -c "$(CONFIG)"
     displayName: "Build package (release)"
-    condition: succeeded()   # only if tests passed
+    condition: succeeded()
 
   - script: |
       set -euo pipefail
@@ -228,7 +241,7 @@ steps:
       targetPath: 'dist'
       artifact: 'AuthPackage'
 
-  # -------- publish to Azure Artifacts feed (Universal Package) --------
+  # Publish to Azure Artifacts feed (optional)
   - task: UniversalPackages@0
     displayName: "Artifacts feed: publish Universal Package v$(PACKAGE_VERSION)"
     condition: succeeded()
