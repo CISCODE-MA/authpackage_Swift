@@ -101,4 +101,47 @@ final class TokenServiceTests: XCTestCase {
         XCTAssertEqual(captured?["refreshToken"] as? String, "EXPLICIT_RT")
     }
 
+    func
+        test_refresh_returns_nil_when_server_omits_accessToken_and_does_not_change_store()
+        async throws
+    {
+        let mock = MockNetworkClient()
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+        let store = InMemoryTokenStore()
+        try store.save(
+            .init(accessToken: "OLD", refreshToken: "KEEP", expiry: nil)
+        )
+
+        mock.responder = { _, path, _, _, _ in
+            XCTAssertEqual(path, Endpoints.refresh)
+            return [:]  // no accessToken in envelope
+        }
+
+        let svc = TokenService(config: cfg, net: mock, tokens: store)
+        let res = try await svc.refresh(refreshToken: "ANY")
+        XCTAssertNil(res)
+        let loaded = try store.load()
+        XCTAssertEqual(loaded?.accessToken, "OLD")
+        XCTAssertEqual(loaded?.refreshToken, "KEEP")
+    }
+
+    func test_logout_clears_store_even_if_server_errors() async throws {
+        let mock = MockNetworkClient()
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+        let store = InMemoryTokenStore()
+        try store.save(.init(accessToken: "A", refreshToken: "R", expiry: nil))
+
+        mock.responder = { _, path, _, _, _ in
+            XCTAssertEqual(path, Endpoints.logout)
+            throw APIError.network("down")  // simulate server/network error
+        }
+
+        let svc = TokenService(config: cfg, net: mock, tokens: store)
+        try await svc.logout()
+        XCTAssertNil(
+            try store.load(),
+            "Store should be cleared even if server call fails"
+        )
+    }
+
 }

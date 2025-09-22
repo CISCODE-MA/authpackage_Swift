@@ -6,6 +6,8 @@
 //
 
 import XCTest
+import AuthenticationServices
+
 
 @testable import AuthPackage
 
@@ -121,6 +123,130 @@ final class AuthClientTests: XCTestCase {
             XCTFail("Expected error")
         } catch { /* ok */  }
         XCTAssertNil(try? store.load())
+    }
+
+    func test_register_delegates_to_registrationService() async throws {
+        let mock = MockNetworkClient()
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+
+        mock.responder = { _, path, method, _, body in
+            XCTAssertEqual(path, Endpoints.registerClient)
+            XCTAssertEqual(method, .POST)
+            XCTAssertEqual(body?["email"] as? String, "z@ex.com")
+            return [
+                "id": "u9", "email": "z@ex.com", "name": "Z",
+                "roles": ["client"], "permissions": [],
+            ]
+        }
+
+        let client = AuthClient(
+            config: cfg,
+            networkClient: mock,
+            tokenStore: InMemoryTokenStore()
+        )
+        let user = try await client.register(
+            email: "z@ex.com",
+            password: "pw",
+            name: "Z",
+            roles: ["client"]
+        )
+        XCTAssertEqual(user.id, "u9")
+    }
+
+    func test_requestPasswordReset_delegates_to_service() async throws {
+        let mock = MockNetworkClient()
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+
+        mock.responder = { _, path, method, _, body in
+            XCTAssertEqual(path, Endpoints.requestPasswordReset)
+            XCTAssertEqual(method, .POST)
+            XCTAssertEqual(body?["email"] as? String, "u@ex.com")
+            return ["message": "sent"]
+        }
+
+        let client = AuthClient(
+            config: cfg,
+            networkClient: mock,
+            tokenStore: InMemoryTokenStore()
+        )
+        let msg = try await client.requestPasswordReset(
+            email: "u@ex.com",
+            type: "client"
+        )
+        XCTAssertEqual(msg, "sent")
+    }
+
+    func test_resetPassword_delegates_to_service() async throws {
+        let mock = MockNetworkClient()
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!)
+
+        mock.responder = { _, path, method, _, body in
+            XCTAssertEqual(path, Endpoints.resetPassword)
+            XCTAssertEqual(method, .POST)
+            XCTAssertEqual(body?["token"] as? String, "T")
+            return ["message": "ok"]
+        }
+
+        let client = AuthClient(
+            config: cfg,
+            networkClient: mock,
+            tokenStore: InMemoryTokenStore()
+        )
+        let msg = try await client.resetPassword(token: "T", newPassword: "New")
+        XCTAssertEqual(msg, "ok")
+    }
+
+    @MainActor
+    func test_loginWithMicrosoft_throws_when_feature_disabled() async {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            microsoftEnabled: false
+        )
+        let client = AuthClient(
+            config: cfg,
+            networkClient: MockNetworkClient(),
+            tokenStore: InMemoryTokenStore()
+        )
+        do {
+            _ = try await client.loginWithMicrosoft(
+                from: ASPresentationAnchor()
+            )
+            XCTFail("Expected error")
+        } catch { /* ok: guarded by feature flag */  }
+    }
+
+    @MainActor
+    func test_loginWithGoogle_throws_when_feature_disabled() async {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            googleEnabled: false
+        )
+        let client = AuthClient(
+            config: cfg,
+            networkClient: MockNetworkClient(),
+            tokenStore: InMemoryTokenStore()
+        )
+        do {
+            _ = try await client.loginWithGoogle(from: ASPresentationAnchor())
+            XCTFail("Expected error")
+        } catch {}
+    }
+
+    @MainActor
+    func test_loginWithFacebook_throws_when_feature_disabled() async {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            facebookEnabled: false
+        )
+        let client = AuthClient(
+            config: cfg,
+            networkClient: MockNetworkClient(),
+            tokenStore: InMemoryTokenStore()
+        )
+        do {
+            _ = try await client.loginWithFacebook(from: ASPresentationAnchor())
+            XCTFail("Expected error")
+        } catch {}
     }
 
 }

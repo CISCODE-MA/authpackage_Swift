@@ -40,4 +40,24 @@ final class OAuthWebAuthenticatorTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
     }
+    func test_signInGoogle_throws_when_redirectScheme_is_nil() async {
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!,
+                                    redirectScheme: nil)
+        let sut = await OAuthWebAuthenticator(config: cfg, tokenStore: InMemoryTokenStore())
+        do {
+            _ = try await sut.signInGoogle(from: ASPresentationAnchor())
+            XCTFail("Expected APIError.invalidURL")
+        } catch APIError.invalidURL { } catch { XCTFail("Unexpected: \(error)") }
+    }
+
+    func test_signInFacebook_throws_when_redirectScheme_is_empty() async {
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!,
+                                    redirectScheme: "")
+        let sut = await OAuthWebAuthenticator(config: cfg, tokenStore: InMemoryTokenStore())
+        do {
+            _ = try await sut.signInFacebook(from: ASPresentationAnchor())
+            XCTFail("Expected APIError.invalidURL")
+        } catch APIError.invalidURL { } catch { XCTFail("Unexpected: \(error)") }
+    }
+
 }
