@@ -36,5 +36,21 @@ final class TokenStoreTests: XCTestCase {
         try store.save(tokens)
         XCTAssertEqual(try store.load(), tokens)  // covers expiry via Equatable
     }
+    
+    func test_new_code_hits_init_save_load_clear() throws {
+        // init → covers the empty initializer
+        let store = InMemoryTokenStore()
+
+        // save → covers the assignment body
+        let t = Tokens(accessToken: "AA", refreshToken: "RR", expiry: nil)
+        try store.save(t)
+
+        // load → covers the return expression
+        XCTAssertEqual(try store.load(), t)
+
+        // clear → covers the nil-assignment
+        try store.clear()
+        XCTAssertNil(try store.load())
+    }
 
 }
