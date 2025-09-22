@@ -6,23 +6,89 @@
 import AuthenticationServices
 import Foundation
 
+// MARK: - Lightweight seam to fake ASWebAuthenticationSession in tests
+
+public protocol WebAuthSession: AnyObject {
+    var prefersEphemeralWebBrowserSession: Bool { get set }
+    func start() -> Bool
+    func cancel()
+}
+
+public protocol WebAuthSessionFactory {
+    func make(
+        url: URL,
+        callbackURLScheme: String,
+        provider: ASWebAuthenticationPresentationContextProviding,
+        completion: @escaping (URL?, Error?) -> Void
+    ) -> WebAuthSession
+}
+
+final class RealWebAuthSession: WebAuthSession {
+    private let inner: ASWebAuthenticationSession
+    init(inner: ASWebAuthenticationSession) { self.inner = inner }
+    var prefersEphemeralWebBrowserSession: Bool {
+        get { inner.prefersEphemeralWebBrowserSession }
+        set { inner.prefersEphemeralWebBrowserSession = newValue }
+    }
+    func start() -> Bool { inner.start() }
+    func cancel() { inner.cancel() }
+}
+
+struct RealWebAuthSessionFactory: WebAuthSessionFactory {
+    func make(
+        url: URL,
+        callbackURLScheme: String,
+        provider: ASWebAuthenticationPresentationContextProviding,
+        completion: @escaping (URL?, Error?) -> Void
+    ) -> WebAuthSession {
+        let s = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: callbackURLScheme,
+            completionHandler: completion
+        )
+        s.presentationContextProvider = provider
+        return RealWebAuthSession(inner: s)
+    }
+}
+
+// MARK: - Authenticator
+
 @MainActor
 public final class OAuthWebAuthenticator: NSObject,
     ASWebAuthenticationPresentationContextProviding
 {
+
     private let config: AuthConfiguration
     private let tokenStore: TokenStore
     private weak var anchor: ASPresentationAnchor?
 
-    // Hold a strong ref to the session while it's running
-    private var currentSession: ASWebAuthenticationSession?
+    private let sessionFactory: WebAuthSessionFactory
+    private var currentSession: WebAuthSession?
 
-    public init(config: AuthConfiguration, tokenStore: TokenStore) {
+    // DESIGNATED initializer (no default argument)
+    public init(
+        config: AuthConfiguration,
+        tokenStore: TokenStore,
+        sessionFactory: WebAuthSessionFactory
+    ) {
         self.config = config
         self.tokenStore = tokenStore
+        self.sessionFactory = sessionFactory
     }
 
-    // MARK: - Public entry points
+    // CONVENIENCE initializer to preserve old call sites
+    public convenience init(
+        config: AuthConfiguration,
+        tokenStore: TokenStore
+    ) {
+        self.init(
+            config: config,
+            tokenStore: tokenStore,
+            sessionFactory: RealWebAuthSessionFactory()
+        )
+    }
+
+    // MARK: Public entry points
 
     public func signInMicrosoft(from anchor: ASPresentationAnchor) async throws
         -> Tokens
@@ -42,7 +108,7 @@ public final class OAuthWebAuthenticator: NSObject,
         try await signIn(providerPath: Endpoints.facebook, from: anchor)
     }
 
-    // MARK: - Shared implementation
+    // MARK: Shared implementation
 
     private func signIn(providerPath: String, from anchor: ASPresentationAnchor)
         async throws -> Tokens
@@ -69,49 +135,59 @@ public final class OAuthWebAuthenticator: NSObject,
                 return cont.resume(throwing: APIError.unknown)
             }
 
-            let session = ASWebAuthenticationSession(
+            let session = sessionFactory.make(
                 url: startURL,
-                callbackURLScheme: scheme
-            ) { [weak self] url, err in
-                defer { self?.currentSession = nil }
+                callbackURLScheme: scheme,
+                provider: self,
+                completion: { [weak self] url, err in
+                    defer { self?.currentSession = nil }
 
-                if let err = err as? ASWebAuthenticationSessionError {
-                    if err.code == .canceledLogin {
+                    if let err = err as? ASWebAuthenticationSessionError {
+                        switch err.code {
+                        case .canceledLogin:
+                            cont.resume(throwing: APIError.unauthorized)
+                        default: cont.resume(throwing: APIError.unknown)
+                        }
+                        return
+                    }
+
+                    guard
+                        let url,
+                        let qi = URLComponents(
+                            url: url,
+                            resolvingAgainstBaseURL: false
+                        )?.queryItems,
+                        let access = qi.first(where: {
+                            $0.name == "accessToken"
+                        })?.value,
+                        !access.isEmpty
+                    else {
                         return cont.resume(throwing: APIError.unauthorized)
                     }
-                    return cont.resume(throwing: APIError.unknown)
+
+                    let refresh = qi.first(where: { $0.name == "refreshToken" }
+                    )?.value
+                    let tokens = Tokens(
+                        accessToken: access,
+                        refreshToken: refresh
+                    )
+
+                    // Best-effort persistence; don’t fail the flow on store errors
+                    do { try self?.tokenStore.save(tokens) } catch {}
+
+                    cont.resume(returning: tokens)
                 }
+            )
 
-                guard
-                    let url,
-                    let qi = URLComponents(
-                        url: url,
-                        resolvingAgainstBaseURL: false
-                    )?.queryItems,
-                    let access = qi.first(where: { $0.name == "accessToken" })?
-                        .value,
-                    !access.isEmpty
-                else {
-                    return cont.resume(throwing: APIError.unauthorized)
-                }
-
-                let refresh = qi.first(where: { $0.name == "refreshToken" })?
-                    .value
-                let tokens = Tokens(accessToken: access, refreshToken: refresh)
-                do { try self?.tokenStore.save(tokens) } catch {}
-                cont.resume(returning: tokens)
-            }
-
-            session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession =
                 config.ephemeralWebSession
-
             self.currentSession = session
             _ = session.start()
         }
     }
 
     // MARK: - ASWebAuthenticationPresentationContextProviding
+
     public func presentationAnchor(for session: ASWebAuthenticationSession)
         -> ASPresentationAnchor
     {
