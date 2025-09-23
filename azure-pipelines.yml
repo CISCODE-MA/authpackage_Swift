@@ -169,45 +169,45 @@ steps:
       inputs:
         pollingTimeoutSec: '600'
 
-  # -------------------------------
-  # Release tagging (SemVer major/minor vs patch)
-  # -------------------------------
-  - script: |
-      set -euo pipefail
-
-      git config user.name  "$(GIT_USER_NAME)"
-      git config user.email "$(GIT_USER_EMAIL)"
-
-      # Last semver tag vX.Y.Z
-      last_tag="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n1 || true)"
-      if [[ -z "${last_tag}" ]]; then last_tag="v0.0.0"; fi
-      echo "Last tag: ${last_tag}"
-
-      IFS=. read -r LMAJ LMIN LPAT <<< "${last_tag#v}"
-
-      # Extract MAJ.MIN from computed PACKAGE_VERSION (strip any -rc…)
-      base="${PACKAGE_VERSION%%-*}"
-      IFS=. read -r MAJ MIN _ <<< "${base:-0.0.0}"
-
-      if (( MAJ > LMAJ )) || (( MAJ == LMAJ && MIN > LMIN )); then
-        NEW_TAG="v${MAJ}.${MIN}.0"
-      else
-        NEW_TAG="v${LMAJ}.${LMIN}.$((LPAT+1))"
-      fi
-
-      echo "Resolved release tag: ${NEW_TAG}"
-      echo "##vso[task.setvariable variable=RELEASE_TAG]${NEW_TAG}"
-
-      # Create and push annotated tag (idempotent)
-      if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null; then
-        echo "Tag ${NEW_TAG} already exists; skipping creation."
-      else
-        git tag -a "${NEW_TAG}" -m "AuthPackage ${NEW_TAG}"
-      fi
-
-      git push origin "${NEW_TAG}"
-    displayName: "Release tagging (push vX.Y.Z)"
-    condition: succeeded()
+#  # -------------------------------
+#  # Release tagging (SemVer major/minor vs patch)
+#  # -------------------------------
+#  - script: |
+#      set -euo pipefail
+#
+#      git config user.name  "$(GIT_USER_NAME)"
+#      git config user.email "$(GIT_USER_EMAIL)"
+#
+#      # Last semver tag vX.Y.Z
+#      last_tag="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n1 || true)"
+#      if [[ -z "${last_tag}" ]]; then last_tag="v0.0.0"; fi
+#      echo "Last tag: ${last_tag}"
+#
+#      IFS=. read -r LMAJ LMIN LPAT <<< "${last_tag#v}"
+#
+#      # Extract MAJ.MIN from computed PACKAGE_VERSION (strip any -rc…)
+#      base="${PACKAGE_VERSION%%-*}"
+#      IFS=. read -r MAJ MIN _ <<< "${base:-0.0.0}"
+#
+#      if (( MAJ > LMAJ )) || (( MAJ == LMAJ && MIN > LMIN )); then
+#        NEW_TAG="v${MAJ}.${MIN}.0"
+#      else
+#        NEW_TAG="v${LMAJ}.${LMIN}.$((LPAT+1))"
+#      fi
+#
+#      echo "Resolved release tag: ${NEW_TAG}"
+#      echo "##vso[task.setvariable variable=RELEASE_TAG]${NEW_TAG}"
+#
+#      # Create and push annotated tag (idempotent)
+#      if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null; then
+#        echo "Tag ${NEW_TAG} already exists; skipping creation."
+#      else
+#        git tag -a "${NEW_TAG}" -m "AuthPackage ${NEW_TAG}"
+#      fi
+#
+#      git push origin "${NEW_TAG}"
+#    displayName: "Release tagging (push vX.Y.Z)"
+#    condition: succeeded()
 
   # Publish to Azure Artifacts feed (optional)
   - task: UniversalPackages@0
