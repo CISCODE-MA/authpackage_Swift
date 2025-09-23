@@ -87,20 +87,27 @@ final class KeychainTokenStoreTests: XCTestCase {
         let kc = FakeKeychain()
         let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
 
-        // Save v1
+        // Save v1 (expiry is not persisted by design)
         let t1 = Tokens(accessToken: "A", refreshToken: "R", expiry: Date(timeIntervalSince1970: 1_700_000_000))
         try sut.save(t1)
-        XCTAssertEqual(try sut.load(), t1)
+
+        let loadedV1 = try sut.load()
+        XCTAssertEqual(loadedV1?.accessToken, t1.accessToken)
+        XCTAssertEqual(loadedV1?.refreshToken, t1.refreshToken)
+        XCTAssertNil(loadedV1?.expiry, "expiry is not saved by KeychainTokenStore")
 
         // Update (duplicate path)
         let t2 = Tokens(accessToken: "B", refreshToken: "R2", expiry: nil)
         try sut.save(t2)
-        XCTAssertEqual(try sut.load(), t2)
+
+        let loadedV2 = try sut.load()
+        XCTAssertEqual(loadedV2, t2) // both have nil expiry
 
         // Clear
         try sut.clear()
         XCTAssertNil(try sut.load())
     }
+
 
     func test_load_missing_returns_nil() throws {
         let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: FakeKeychain())
@@ -254,6 +261,55 @@ final class KeychainTokenStoreErrorTests: XCTestCase {
             // ok
         } catch {
             XCTFail("Unexpected \(error)")
+        }
+    }
+    func test_load_with_expiry_field_decodes_date() throws {
+        let ts = Date().timeIntervalSince1970.rounded()
+        let json: [String: Any] = ["accessToken": "X", "expiry": ts]
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let kc = FakeKeychain()
+        kc.storage = data
+
+        let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
+        let loaded = try sut.load()
+
+        XCTAssertNotNil(loaded?.expiry, "expiry should decode when present")
+        XCTAssertEqual(loaded?.expiry?.timeIntervalSince1970.rounded(), ts)
+    }
+
+    func test_load_without_accessToken_returns_nil() throws {
+        // accessToken missing -> guard returns nil
+        let json: [String: Any] = ["refreshToken": "R"]
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let kc = FakeKeychain()
+        kc.storage = data
+
+        let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
+        XCTAssertNil(try sut.load())
+    }
+
+    final class KeychainTokenStoreMoreErrorTests: XCTestCase {
+        func test_load_maps_userCanceled_to_unauthorized() {
+            let kc = ScriptableKeychain()
+            kc.copyStatus = errSecUserCanceled
+
+            let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
+            do {
+                _ = try sut.load()
+                XCTFail("Expected unauthorized")
+            } catch APIError.unauthorized {
+                // ok
+            } catch {
+                XCTFail("Unexpected \(error)")
+            }
+        }
+
+        func test_clear_success_does_not_throw() {
+            let kc = ScriptableKeychain()
+            kc.deleteStatus = errSecSuccess
+
+            let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
+            XCTAssertNoThrow(try sut.clear())
         }
     }
 }

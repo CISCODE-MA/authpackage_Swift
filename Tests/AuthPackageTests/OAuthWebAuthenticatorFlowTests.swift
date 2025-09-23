@@ -88,13 +88,19 @@ final class OAuthWebAuthenticatorFlowTests: XCTestCase {
 
     @MainActor
     func test_success_without_refreshToken_saves_nil_refresh() async throws {
-        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!,
-                                    redirectScheme: "authdemo",
-                                    ephemeralWebSession: true)
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            redirectScheme: "authdemo",
+            ephemeralWebSession: true
+        )
 
         let store = InMemoryTokenStore()
         let factory = CapturingFactory()
-        let sut = OAuthWebAuthenticator(config: cfg, tokenStore: store, sessionFactory: factory)
+        let sut = OAuthWebAuthenticator(
+            config: cfg,
+            tokenStore: store,
+            sessionFactory: factory
+        )
 
         // Drive success: only accessToken present
         factory.session.onStart = {
@@ -108,7 +114,6 @@ final class OAuthWebAuthenticatorFlowTests: XCTestCase {
         XCTAssertEqual(try store.load()?.refreshToken, nil)
     }
 
-    
     func test_missing_accessToken_maps_to_unauthorized_and_does_not_save() async
     {
         let store = InMemoryTokenStore()
@@ -171,12 +176,16 @@ final class OAuthWebAuthenticatorFlowTests: XCTestCase {
 
     @MainActor
     func test_generic_error_maps_to_unauthorized() async {
-        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!,
-                                    redirectScheme: "authdemo")
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            redirectScheme: "authdemo"
+        )
         let factory = CapturingFactory()
-        let sut = OAuthWebAuthenticator(config: cfg,
-                                        tokenStore: InMemoryTokenStore(),
-                                        sessionFactory: factory)
+        let sut = OAuthWebAuthenticator(
+            config: cfg,
+            tokenStore: InMemoryTokenStore(),
+            sessionFactory: factory
+        )
 
         factory.session.onStart = {
             factory.completion?(nil, NSError(domain: "test", code: -1))
@@ -206,5 +215,156 @@ final class OAuthWebAuthenticatorFlowTests: XCTestCase {
             completionHandler: { _, _ in }
         )
         _ = sut.presentationAnchor(for: dummy)  // no crash = covered
+    }
+
+    @MainActor
+    func test_nonCanceled_ASWebAuth_error_maps_to_unknown() async {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            redirectScheme: "authdemo"
+        )
+        let factory = CapturingFactory()
+        let sut = OAuthWebAuthenticator(
+            config: cfg,
+            tokenStore: InMemoryTokenStore(),
+            sessionFactory: factory
+        )
+
+        factory.session.onStart = {
+            let err = NSError(
+                domain: ASWebAuthenticationSessionErrorDomain,
+                code: ASWebAuthenticationSessionError.Code
+                    .presentationContextInvalid.rawValue,
+                userInfo: nil
+            )
+            factory.completion?(nil, err)
+        }
+
+        do {
+            _ = try await sut.signInMicrosoft(from: ASPresentationAnchor())
+            XCTFail("Expected unknown")
+        } catch APIError.unknown {
+            // ok (default branch of the error switch)
+        } catch {
+            XCTFail("Unexpected \(error)")
+        }
+    }
+
+    @MainActor
+    func test_callback_with_empty_accessToken_maps_to_unauthorized() async {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            redirectScheme: "authdemo"
+        )
+        let store = InMemoryTokenStore()
+        let factory = CapturingFactory()
+        let sut = OAuthWebAuthenticator(
+            config: cfg,
+            tokenStore: store,
+            sessionFactory: factory
+        )
+
+        factory.session.onStart = {
+            // accessToken present but empty -> unauthorized
+            let url = URL(string: "authdemo://auth/callback?accessToken=")!
+            factory.completion?(url, nil)
+        }
+
+        do {
+            _ = try await sut.signInMicrosoft(from: ASPresentationAnchor())
+            XCTFail("Expected unauthorized")
+        } catch APIError.unauthorized {
+            XCTAssertNil(try? store.load())
+        } catch {
+            XCTFail("Unexpected \(error)")
+        }
+    }
+
+    private final class ThrowingStore: TokenStore {
+        func save(_ tokens: Tokens) throws { throw APIError.network("nope") }
+        func load() throws -> Tokens? { nil }
+        func clear() throws {}
+    }
+
+    @MainActor
+    func test_persistence_failure_is_ignored_but_tokens_are_returned()
+        async throws
+    {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            redirectScheme: "authdemo"
+        )
+        let factory = CapturingFactory()
+        let sut = OAuthWebAuthenticator(
+            config: cfg,
+            tokenStore: ThrowingStore(),
+            sessionFactory: factory
+        )
+
+        factory.session.onStart = {
+            let url = URL(
+                string:
+                    "authdemo://auth/callback?accessToken=OK&refreshToken=RR"
+            )!
+            factory.completion?(url, nil)
+        }
+
+        let tokens = try await sut.signInMicrosoft(from: ASPresentationAnchor())
+        XCTAssertEqual(tokens.accessToken, "OK")  // returned even if store.save throws
+    }
+
+    @MainActor
+    func test_signInGoogle_happy_path_returns_tokens() async throws {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            redirectScheme: "authdemo",
+            ephemeralWebSession: true
+        )
+        let store = InMemoryTokenStore()
+        let factory = CapturingFactory()
+        let sut = OAuthWebAuthenticator(
+            config: cfg,
+            tokenStore: store,
+            sessionFactory: factory
+        )
+
+        factory.session.onStart = {
+            let url = URL(
+                string: "authdemo://auth/callback?accessToken=G&refreshToken=RG"
+            )!
+            factory.completion?(url, nil)
+        }
+
+        let tokens = try await sut.signInGoogle(from: ASPresentationAnchor())
+        XCTAssertEqual(tokens.accessToken, "G")
+        XCTAssertEqual(try store.load(), tokens)
+        XCTAssertEqual(factory.lastScheme, "authdemo")
+        XCTAssertTrue(factory.session.started)
+    }
+
+    @MainActor
+    func test_signInFacebook_happy_path_returns_tokens() async throws {
+        let cfg = AuthConfiguration(
+            baseURL: URL(string: "http://unit.test")!,
+            redirectScheme: "authdemo"
+        )
+        let store = InMemoryTokenStore()
+        let factory = CapturingFactory()
+        let sut = OAuthWebAuthenticator(
+            config: cfg,
+            tokenStore: store,
+            sessionFactory: factory
+        )
+
+        factory.session.onStart = {
+            let url = URL(
+                string: "authdemo://auth/callback?accessToken=F&refreshToken=RF"
+            )!
+            factory.completion?(url, nil)
+        }
+
+        let tokens = try await sut.signInFacebook(from: ASPresentationAnchor())
+        XCTAssertEqual(tokens.accessToken, "F")
+        XCTAssertEqual(try store.load(), tokens)
     }
 }
