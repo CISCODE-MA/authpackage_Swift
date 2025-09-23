@@ -193,9 +193,9 @@ steps:
         cliProjectKey: '$(SONAR_PROJECT_KEY)'
         cliProjectName: '$(SONAR_PROJECT_NAME)'
         extraProperties: |
+          sonar.projectVersion=$(Build.BuildNumber)
           sonar.branch.name=$(Build.SourceBranchName)
           sonar.scm.revision=$(Build.SourceVersion)
-          sonar.projectVersion=$(Build.BuildNumber)
 
     - task: SonarCloudAnalyze@3
       displayName: "SonarCloud | Run analysis"
