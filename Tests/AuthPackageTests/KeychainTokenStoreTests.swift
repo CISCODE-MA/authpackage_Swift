@@ -106,6 +106,14 @@ final class KeychainTokenStoreTests: XCTestCase {
         let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: FakeKeychain())
         XCTAssertNil(try sut.load())
     }
+    
+    func test_load_malformed_blob_returns_nil() throws {
+        let kc = FakeKeychain()
+        kc.storage = Data([0xFF, 0x00, 0xAA])     // not valid JSON
+        let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
+
+        XCTAssertNil(try sut.load())
+    }
 }
 
 final class ScriptableKeychain: KeychainClient {
@@ -160,6 +168,23 @@ final class KeychainTokenStoreErrorTests: XCTestCase {
             XCTFail("Unexpected \(error)")
         }
     }
+    
+    func test_save_duplicate_then_update_fails_maps_to_network() {
+        let kc = ScriptableKeychain()
+        kc.addStatus = errSecDuplicateItem        // force update path
+        kc.updateStatus = errSecNotAvailable      // make update fail
+
+        let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
+
+        do {
+            try sut.save(.init(accessToken: "A", refreshToken: nil, expiry: nil))
+            XCTFail("Expected error")
+        } catch APIError.network {
+            // ok
+        } catch {
+            XCTFail("Unexpected \(error)")
+        }
+    }
 
     func test_load_maps_authFailed_to_unauthorized() {
         let kc = ScriptableKeychain()
@@ -191,6 +216,22 @@ final class KeychainTokenStoreErrorTests: XCTestCase {
         }
     }
 
+    func test_clear_maps_authFailed_to_unauthorized() {
+        let kc = ScriptableKeychain()
+        kc.deleteStatus = errSecAuthFailed
+
+        let sut = KeychainTokenStore(service: "svc", account: "acc", keychain: kc)
+
+        do {
+            try sut.clear()
+            XCTFail("Expected error")
+        } catch APIError.unauthorized {
+            // ok
+        } catch {
+            XCTFail("Unexpected \(error)")
+        }
+    }
+    
     func test_clear_ignores_itemNotFound_but_propagates_other_errors() {
         // item not found => no throw
         do {

@@ -86,6 +86,29 @@ final class OAuthWebAuthenticatorFlowTests: XCTestCase {
         XCTAssertTrue(factory.session.started)  // session started
     }
 
+    @MainActor
+    func test_success_without_refreshToken_saves_nil_refresh() async throws {
+        let cfg = AuthConfiguration(baseURL: URL(string: "http://unit.test")!,
+                                    redirectScheme: "authdemo",
+                                    ephemeralWebSession: true)
+
+        let store = InMemoryTokenStore()
+        let factory = CapturingFactory()
+        let sut = OAuthWebAuthenticator(config: cfg, tokenStore: store, sessionFactory: factory)
+
+        // Drive success: only accessToken present
+        factory.session.onStart = {
+            let url = URL(string: "authdemo://auth/callback?accessToken=AAA")!
+            factory.completion?(url, nil)
+        }
+
+        let tokens = try await sut.signInMicrosoft(from: ASPresentationAnchor())
+        XCTAssertEqual(tokens.accessToken, "AAA")
+        XCTAssertNil(tokens.refreshToken)
+        XCTAssertEqual(try store.load()?.refreshToken, nil)
+    }
+
+    
     func test_missing_accessToken_maps_to_unauthorized_and_does_not_save() async
     {
         let store = InMemoryTokenStore()
