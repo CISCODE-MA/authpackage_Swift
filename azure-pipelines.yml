@@ -2,21 +2,27 @@
 # AuthPackage – CI (release branch)
 # -------------------------------
 
-# Human-friendly run name:
+# Human-friendly run name: (used as sonar.projectVersion)
 name: authpkg_release_$(Date:yyyyMMdd).$(Rev:r)
 
 trigger:
   branches:
-    include:
-      - release
+    include: [ release ]
 
 pr:
   branches:
-    include:
-      - release
+    include: [ release ]
 
 pool:
   vmImage: macos-latest
+
+# Bring in secrets safely from Library > Variable Groups (recommended)
+# Create a group named "AuthPackage-Secrets" with:
+#   GITHUB_REPO   (e.g. yourorg/authpackage-public)  [non-secret]
+#   GITHUB_TOKEN  (GitHub PAT with repo write)       [secret]
+# Optionally also store SONAR vars there if you prefer.
+variables:
+- group: AuthPackage-Secrets
 
 variables:
   # Build mode for swift build (we build once more after tests)
@@ -33,8 +39,12 @@ variables:
   FEED_PATH: '$(System.TeamProject)/ios-packages'
   PACKAGE_NAME: 'authpackage'
 
-  # Will be overridden by version resolver
+  # Will be overridden by version resolver (RC channel)
   PACKAGE_VERSION: '0.0.0-rc.0'
+
+  # Git identity for tagging / GitHub push (non-secret)
+  GIT_USER_NAME: 'ci-bot'
+  GIT_USER_EMAIL: 'ci-bot@ciscod.com'
 
 steps:
   # Ensure later git commands reuse OAuth token
@@ -164,7 +174,7 @@ steps:
       xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" -format=html -output-dir coverage-html
     displayName: "Generate HTML coverage (optional)"
 
-  # Only publish HTML if the folder exists (Azure conditions don't support exists())
+  # Only publish HTML if the folder exists
   - script: |
       if [ -d coverage-html ]; then
         echo "##vso[task.setvariable variable=PUBLISH_HTML]true"
@@ -243,6 +253,46 @@ steps:
       targetPath: 'dist'
       artifact: 'AuthPackage'
 
+  # -------------------------------
+  # Release tagging (SemVer major/minor vs patch)
+  # -------------------------------
+  - script: |
+      set -euo pipefail
+
+      git config user.name  "$(GIT_USER_NAME)"
+      git config user.email "$(GIT_USER_EMAIL)"
+
+      # Last semver tag vX.Y.Z
+      last_tag="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n1 || true)"
+      if [[ -z "${last_tag}" ]]; then last_tag="v0.0.0"; fi
+      echo "Last tag: ${last_tag}"
+
+      IFS=. read -r LMAJ LMIN LPAT <<< "${last_tag#v}"
+
+      # Extract MAJ.MIN from computed PACKAGE_VERSION (strip any -rc…)
+      base="${PACKAGE_VERSION%%-*}"
+      IFS=. read -r MAJ MIN _ <<< "${base:-0.0.0}"
+
+      if (( MAJ > LMAJ )) || (( MAJ == LMAJ && MIN > LMIN )); then
+        NEW_TAG="v${MAJ}.${MIN}.0"
+      else
+        NEW_TAG="v${LMAJ}.${LMIN}.$((LPAT+1))"
+      fi
+
+      echo "Resolved release tag: ${NEW_TAG}"
+      echo "##vso[task.setvariable variable=RELEASE_TAG]${NEW_TAG}"
+
+      # Create and push annotated tag (idempotent)
+      if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null; then
+        echo "Tag ${NEW_TAG} already exists; skipping creation."
+      else
+        git tag -a "${NEW_TAG}" -m "AuthPackage ${NEW_TAG}"
+      fi
+
+      git push origin "${NEW_TAG}"
+    displayName: "Release tagging (decide & push vX.Y.Z)"
+    condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'release'))
+
   # Publish to Azure Artifacts feed (optional)
   - task: UniversalPackages@0
     displayName: "Artifacts feed: publish Universal Package v$(PACKAGE_VERSION)"
@@ -256,3 +306,47 @@ steps:
       versionOption: custom
       versionPublish: '$(PACKAGE_VERSION)'
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
+
+  # -------------------------------
+  # Publish cleaned release to GitHub (public snapshot)
+  # -------------------------------
+  - script: |
+      set -euo pipefail
+      : "${RELEASE_TAG:?RELEASE_TAG is required}"
+      : "${GITHUB_REPO:?GITHUB_REPO is required}"
+
+      INCLUDE=( Package.swift Sources Tests README.md LICENSE )
+
+      WORK=public-export
+      rm -rf "$WORK"
+      mkdir -p "$WORK"
+
+      for p in "${INCLUDE[@]}"; do
+        if [[ -e "$p" ]]; then
+          cp -a "$p" "$WORK"/
+        fi
+      done
+
+      pushd "$WORK" >/dev/null
+      git init
+      git config user.name  "$(GIT_USER_NAME)"
+      git config user.email "$(GIT_USER_EMAIL)"
+      git add .
+      git commit -m "Release ${RELEASE_TAG}"
+
+      # tag & push
+      git tag -a "${RELEASE_TAG}" -m "Release ${RELEASE_TAG}"
+      GH_URL="https://$(GITHUB_TOKEN)@github.com/$(GITHUB_REPO).git"
+      git remote add github "${GH_URL}"
+
+      git branch -M "public/${RELEASE_TAG}"
+      git push github "public/${RELEASE_TAG}"
+      git push github "${RELEASE_TAG}"
+      popd >/dev/null
+    displayName: "Publish cleaned release to GitHub"
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)   # secret, masked in logs
+      GITHUB_REPO:  $(GITHUB_REPO)
+      GIT_USER_NAME:  $(GIT_USER_NAME)
+      GIT_USER_EMAIL: $(GIT_USER_EMAIL)
+    condition: succeeded()
