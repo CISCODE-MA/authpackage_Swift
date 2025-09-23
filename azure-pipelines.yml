@@ -209,8 +209,10 @@ steps:
 #    displayName: "Release tagging (push vX.Y.Z)"
 #    condition: succeeded()
 
-  # Publish to Azure Artifacts feed (optional)
+   # Publish to Azure Artifacts feed (optional)
   - task: UniversalPackages@0
+    displayName: "Artifacts feed: publish Universal Package v$(PACKAGE_VERSION)"
+    condition: succeeded()
     inputs:
       command: publish
       publishDirectory: 'dist/pkg'
@@ -220,7 +222,7 @@ steps:
       versionOption: custom
       versionPublish: '$(PACKAGE_VERSION)'
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
-    condition: succeeded()
+
 
   # -------------------------------
   # Publish cleaned release to GitHub (public snapshot)
