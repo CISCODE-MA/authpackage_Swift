@@ -24,33 +24,43 @@ pool:
 variables:
 - group: AuthPackage-Secrets
 
-variables:
   # Build mode for swift build (we build once more after tests)
-  CONFIG: release
+- name: CONFIG
+  value: release
 
   # SonarCloud
-  SONAR_ENABLED: 'true'
-  SONARQ_ENDPOINT: 'sonarcloud-authpackage'
-  SONAR_ORG: "ciscode"
-  SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
-  SONAR_PROJECT_NAME: 'pkg-ios-auth'
+- name: SONAR_ENABLED
+  value: 'true'
+- name: SONARQ_ENDPOINT
+  value: 'sonarcloud-authpackage'
+- name: SONAR_ORG
+  value: "ciscode"
+- name: SONAR_PROJECT_KEY
+  value: 'CISCODEAPPS_pkg-ios-auth'
+- name: SONAR_PROJECT_NAME
+  value: 'pkg-ios-auth'
 
   # Azure Artifacts feed (optional)
-  FEED_PATH: '$(System.TeamProject)/ios-packages'
-  PACKAGE_NAME: 'authpackage'
+- name: FEED_PATH
+  value: '$(System.TeamProject)/ios-packages'
+- name: PACKAGE_NAME
+  value: 'authpackage'
 
   # Will be overridden by version resolver (RC channel)
-  PACKAGE_VERSION: '0.0.0-rc.0'
+- name: PACKAGE_VERSION
+  value: '0.0.0-rc.0'
 
   # Git identity for tagging / GitHub push (non-secret)
-  GIT_USER_NAME: 'ci-bot'
-  GIT_USER_EMAIL: 'ci-bot@ciscod.com'
+- name: GIT_USER_NAME
+  value: 'ci-bot'
+- name: GIT_USER_EMAIL
+  value: 'ci-bot@ciscod.com'
 
 steps:
   # Ensure later git commands reuse OAuth token
   - checkout: self
-    fetchDepth: 0
-    persistCredentials: true
+    fetchDepth: '0'
+    persistCredentials: 'true'
     displayName: "Checkout repository"
 
   # Authenticated tag fetch (so versioning sees all tags)
@@ -59,7 +69,7 @@ steps:
       git -c http.extraheader="AUTHORIZATION: bearer $(System.AccessToken)" \
           fetch --tags --force --prune origin
     env:
-      System.AccessToken: $(System.AccessToken)
+      System.AccessToken: '$(System.AccessToken)'
     displayName: "Fetch tags (auth)"
 
   # Resolve SemVer
@@ -147,7 +157,7 @@ steps:
     displayName: "Convert coverage: LCOV → Cobertura XML"
 
   # Publish to the Code Coverage tab
-  - task: PublishCodeCoverageResults@2
+  - task: PublishCodeCoverageResults@1
     displayName: "Publish code coverage (Cobertura)"
     inputs:
       codeCoverageTool: Cobertura
@@ -192,29 +202,30 @@ steps:
       artifact: 'coverage-html'
 
   # ---- SonarCloud (v3 tasks) ----
-  - ${{ if eq(variables['SONAR_ENABLED'], 'true') }}:
-    - task: SonarCloudPrepare@3
-      displayName: "SonarCloud | Prepare analysis"
-      inputs:
-        SonarCloud: '$(SONARQ_ENDPOINT)'
-        organization: '$(SONAR_ORG)'
-        scannerMode: 'CLI'
-        configMode: 'file'
-        cliProjectKey: '$(SONAR_PROJECT_KEY)'
-        cliProjectName: '$(SONAR_PROJECT_NAME)'
-        extraProperties: |
-          sonar.projectVersion=$(Build.BuildNumber)
-          sonar.branch.name=$(Build.SourceBranchName)
-          sonar.scm.revision=$(Build.SourceVersion)
+  - task: SonarQubePrepare@5
+    displayName: "SonarCloud | Prepare analysis"
+    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
+    inputs:
+      SonarQube: '$(SONARQ_ENDPOINT)'
+      organization: '$(SONAR_ORG)'
+      scannerMode: 'CLI'
+      configMode: 'file'
+      cliProjectKey: '$(SONAR_PROJECT_KEY)'
+      cliProjectName: '$(SONAR_PROJECT_NAME)'
+      extraProperties: |
+        sonar.projectVersion=$(Build.BuildNumber)
+        sonar.branch.name=$(Build.SourceBranchName)
+        sonar.scm.revision=$(Build.SourceVersion)
 
-    - task: SonarCloudAnalyze@3
-      displayName: "SonarCloud | Run analysis"
+  - task: SonarQubeAnalyze@5
+    displayName: "SonarCloud | Run analysis"
+    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
 
-    - task: SonarCloudPublish@3
-      displayName: "SonarCloud | Publish Quality Gate"
-      condition: succeeded()
-      inputs:
-        pollingTimeoutSec: '600'
+  - task: SonarQubePublish@5
+    displayName: "SonarCloud | Publish Quality Gate"
+    condition: and(succeeded(), eq(variables['SONAR_ENABLED'], 'true'))
+    inputs:
+      pollingTimeoutSec: '600'
   # -------------------------------
 
   - script: |
