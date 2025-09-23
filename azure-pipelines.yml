@@ -2,58 +2,71 @@
 # AuthPackage – CI (release branch)
 # -------------------------------
 
-# Human-friendly run name: (used as sonar.projectVersion)
+# Human-friendly run name:
 name: authpkg_release_$(Date:yyyyMMdd).$(Rev:r)
 
 trigger:
   branches:
-    include: [ release ]
+    include:
+      - release
 
 pr:
   branches:
-    include: [ release ]
+    include:
+      - release
 
 pool:
   vmImage: macos-latest
 
 variables:
-- group: AuthPackage-Secrets
-
+  # Build mode for swift build (we build once more after tests)
   CONFIG: release
 
+  # SonarCloud
   SONAR_ENABLED: 'true'
   SONARQ_ENDPOINT: 'sonarcloud-authpackage'
   SONAR_ORG: "ciscode"
   SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
   SONAR_PROJECT_NAME: 'pkg-ios-auth'
 
+  # Azure Artifacts feed (optional)
   FEED_PATH: '$(System.TeamProject)/ios-packages'
   PACKAGE_NAME: 'authpackage'
 
+  # Will be overridden by version resolver
   PACKAGE_VERSION: '0.0.0-rc.0'
 
-  GIT_USER_NAME: 'ci-bot'
-  GIT_USER_EMAIL: 'ci-bot@ciscod.com'
-
 steps:
+  # Ensure later git commands reuse OAuth token
   - checkout: self
     fetchDepth: 0
     persistCredentials: true
     displayName: "Checkout repository"
 
+  # Authenticated tag fetch (so versioning sees all tags)
   - script: |
       set -euo pipefail
-      git -c http.extraheader="AUTHORIZATION: bearer $(System.AccessToken)"           fetch --tags --force --prune origin
+      git -c http.extraheader="AUTHORIZATION: bearer $(System.AccessToken)" \
+          fetch --tags --force --prune origin
     env:
       System.AccessToken: $(System.AccessToken)
     displayName: "Fetch tags (auth)"
 
+  # Resolve SemVer
+  # - If building a tag 'vX.Y.Z' => version 'X.Y.Z'
+  # - Else on 'release' branch   => 'NEXT_MINOR.0-rc.YYYYMMDD.BUILDID'
   - script: |
       set -euo pipefail
+
       REF="${BUILD_SOURCEBRANCH}"
+
+      # Prefer describe; else fall back to highest vX.Y.Z in repo
       get_last_tag() {
-        git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null         || git tag -l 'v[0-9]*' --sort=-v:refname | head -n1         || true
+        git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null \
+        || git tag -l 'v[0-9]*' --sort=-v:refname | head -n1 \
+        || true
       }
+
       if [[ "$REF" == refs/tags/v* ]]; then
         VER="${REF#refs/tags/v}"
         CHANNEL="stable"
@@ -70,6 +83,7 @@ steps:
         VER="${NEXT}-rc.${DATE}.${BUILD_BUILDID}"
         CHANNEL="rc"
       fi
+
       echo "Resolved PACKAGE_VERSION=$VER (channel=$CHANNEL)"
       echo "##vso[task.setvariable variable=PACKAGE_VERSION]$VER"
       echo "##vso[task.setvariable variable=RELEASE_CHANNEL]$CHANNEL"
@@ -77,7 +91,64 @@ steps:
 
   - script: |
       set -euo pipefail
+      echo "Swift toolchain:"
+      swift --version
+      echo "Xcode:"
+      xcodebuild -version
+    displayName: "Show toolchain versions"
+
+  - script: |
+      set -euo pipefail
+      echo "Running SwiftPM tests with coverage…"
       swift test --enable-code-coverage
+
+      # Locate coverage profile (newer toolchains)
+      if swift test --show-codecov-path >/dev/null 2>&1; then
+        CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
+        PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
+        PROF="$PROF_DIR/default.profdata"
+      else
+        PROF=".build/debug/codecov/default.profdata"
+      fi
+
+      # Test runner binary for llvm-cov
+      if swift test --show-test-binary-path >/dev/null 2>&1; then
+        TEST_BIN=$(swift test --show-test-binary-path)
+      else
+        TEST_BIN=$(find .build -type f -name '*Tests' -perm -111 2>/dev/null | head -n1)
+      fi
+
+      echo "Coverage profile: $PROF"
+      echo "Test binary: $TEST_BIN"
+
+      # Produce LCOV (for DevOps UI) + Swift text (for Sonar)
+      xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
+      echo "Wrote coverage.lcov"
+      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" > coverage.swift.txt
+      echo "Wrote coverage.swift.txt for SonarSwift"
+    displayName: "Build & test (with coverage)"
+
+  # Convert LCOV to Cobertura XML for Azure DevOps UI
+  - script: |
+      set -euo pipefail
+      python3 -m pip install --user lcov_cobertura
+      python3 -m lcov_cobertura coverage.lcov --output coverage.cobertura.xml
+      echo "Wrote coverage.cobertura.xml"
+    displayName: "Convert coverage: LCOV → Cobertura XML"
+
+  # Publish to the Code Coverage tab
+  - task: PublishCodeCoverageResults@2
+    displayName: "Publish code coverage (Cobertura)"
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: 'coverage.cobertura.xml'
+      reportDirectory: 'coverage-html'
+      failIfCoverageEmpty: false
+
+  # Generate HTML coverage (optional)
+  - script: |
+      set -euo pipefail
+      mkdir -p coverage-html
       if swift test --show-codecov-path >/dev/null 2>&1; then
         CODECOV_JSON_PATH=$(swift test --show-codecov-path | tail -n1)
         PROF_DIR=$(dirname "$CODECOV_JSON_PATH")
@@ -90,26 +161,30 @@ steps:
       else
         TEST_BIN=$(find .build -type f -name '*Tests' -perm -111 2>/dev/null | head -n1)
       fi
-      xcrun llvm-cov export -format=lcov -instr-profile "$PROF" "$TEST_BIN" > coverage.lcov
-      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" > coverage.swift.txt
-    displayName: "Build & test (with coverage)"
+      xcrun llvm-cov show "$TEST_BIN" -instr-profile "$PROF" -format=html -output-dir coverage-html
+    displayName: "Generate HTML coverage (optional)"
 
+  # Only publish HTML if the folder exists (Azure conditions don't support exists())
   - script: |
-      set -euo pipefail
-      python3 -m pip install --user lcov_cobertura
-      python3 -m lcov_cobertura coverage.lcov --output coverage.cobertura.xml
-    displayName: "Convert coverage: LCOV → Cobertura XML"
+      if [ -d coverage-html ]; then
+        echo "##vso[task.setvariable variable=PUBLISH_HTML]true"
+        echo "coverage-html exists, will publish."
+      else
+        echo "coverage-html is missing, skipping publish."
+      fi
+    displayName: "Check coverage-html existence"
 
-  - task: PublishCodeCoverageResults@2
-    displayName: "Publish code coverage (Cobertura)"
+  - task: PublishPipelineArtifact@1
+    displayName: "Publish coverage HTML (optional)"
+    condition: and(succeededOrFailed(), eq(variables['PUBLISH_HTML'], 'true'))
     inputs:
-      codeCoverageTool: Cobertura
-      summaryFileLocation: 'coverage.cobertura.xml'
-      reportDirectory: 'coverage-html'
-      failIfCoverageEmpty: false
+      targetPath: 'coverage-html'
+      artifact: 'coverage-html'
 
+  # ---- SonarCloud (v3 tasks) ----
   - ${{ if eq(variables['SONAR_ENABLED'], 'true') }}:
     - task: SonarCloudPrepare@3
+      displayName: "SonarCloud | Prepare analysis"
       inputs:
         SonarCloud: '$(SONARQ_ENDPOINT)'
         organization: '$(SONAR_ORG)'
@@ -121,38 +196,57 @@ steps:
           sonar.projectVersion=$(Build.BuildNumber)
           sonar.branch.name=$(Build.SourceBranchName)
           sonar.scm.revision=$(Build.SourceVersion)
+
     - task: SonarCloudAnalyze@3
+      displayName: "SonarCloud | Run analysis"
+
     - task: SonarCloudPublish@3
+      displayName: "SonarCloud | Publish Quality Gate"
       condition: succeeded()
       inputs:
         pollingTimeoutSec: '600'
+  # -------------------------------
 
   - script: |
       set -euo pipefail
-      git config user.name  "$(GIT_USER_NAME)"
-      git config user.email "$(GIT_USER_EMAIL)"
-      last_tag="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n1 || true)"
-      if [[ -z "${last_tag}" ]]; then last_tag="v0.0.0"; fi
-      IFS=. read -r LMAJ LMIN LPAT <<< "${last_tag#v}"
-      base="${PACKAGE_VERSION%%-*}"
-      IFS=. read -r MAJ MIN _ <<< "${base:-0.0.0}"
-      if (( MAJ > LMAJ )) || (( MAJ == LMAJ && MIN > LMIN )); then
-        NEW_TAG="v${MAJ}.${MIN}.0"
-      else
-        NEW_TAG="v${LMAJ}.${LMIN}.$((LPAT+1))"
-      fi
-      echo "Resolved release tag: ${NEW_TAG}"
-      echo "##vso[task.setvariable variable=RELEASE_TAG]${NEW_TAG}"
-      if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null; then
-        echo "Tag ${NEW_TAG} already exists"
-      else
-        git tag -a "${NEW_TAG}" -m "AuthPackage ${NEW_TAG}"
-      fi
-      git push origin "${NEW_TAG}"
-    displayName: "Release tagging (push vX.Y.Z)"
+      echo "Building package in release mode…"
+      swift build -c "$(CONFIG)"
+    displayName: "Build package (release)"
     condition: succeeded()
 
+  - script: |
+      set -euo pipefail
+      echo "Packaging source artifact…"
+      rm -rf dist && mkdir -p dist/pkg
+
+      cp -a Package.swift dist/pkg/
+      [ -f Package.resolved ] && cp Package.resolved dist/pkg/ || true
+      [ -d Sources ] && cp -a Sources dist/pkg/ || true
+      [ -f README.md ] && cp README.md dist/pkg/ || true
+      [ -f LICENSE ] && cp LICENSE dist/pkg/ || true
+      [ -f coverage.lcov ] && cp coverage.lcov dist/pkg/ || true
+
+      SHORT="${BUILD_SOURCEVERSION:0:7}"
+      BRANCH="${BUILD_SOURCEBRANCHNAME//\//-}"
+      pushd dist >/dev/null
+      zip -rq "AuthPackage_src_${BRANCH}_v$(PACKAGE_VERSION)_${SHORT}.zip" pkg
+      popd >/dev/null
+
+      echo "Created dist/AuthPackage_src_${BRANCH}_v$(PACKAGE_VERSION)_${SHORT}.zip"
+    displayName: "Create source artifact (.zip)"
+    condition: succeeded()
+
+  - task: PublishPipelineArtifact@1
+    displayName: "Publish artifact: AuthPackage (source zip)"
+    condition: succeeded()
+    inputs:
+      targetPath: 'dist'
+      artifact: 'AuthPackage'
+
+  # Publish to Azure Artifacts feed (optional)
   - task: UniversalPackages@0
+    displayName: "Artifacts feed: publish Universal Package v$(PACKAGE_VERSION)"
+    condition: succeeded()
     inputs:
       command: publish
       publishDirectory: 'dist/pkg'
@@ -162,36 +256,3 @@ steps:
       versionOption: custom
       versionPublish: '$(PACKAGE_VERSION)'
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
-    condition: succeeded()
-
-  - script: |
-      set -euo pipefail
-      : "${RELEASE_TAG:?RELEASE_TAG is required}"
-      : "${GITHUB_REPO:?GITHUB_REPO is required}"
-      INCLUDE=( Package.swift Sources Tests README.md LICENSE )
-      WORK=public-export
-      rm -rf "$WORK"
-      mkdir -p "$WORK"
-      for p in "${INCLUDE[@]}"; do
-        if [[ -e "$p" ]]; then cp -a "$p" "$WORK"/; fi
-      done
-      pushd "$WORK" >/dev/null
-      git init
-      git config user.name  "$(GIT_USER_NAME)"
-      git config user.email "$(GIT_USER_EMAIL)"
-      git add .
-      git commit -m "Release ${RELEASE_TAG}"
-      git tag -a "${RELEASE_TAG}" -m "Release ${RELEASE_TAG}"
-      GH_URL="https://$(GITHUB_TOKEN)@github.com/$(GITHUB_REPO).git"
-      git remote add github "${GH_URL}"
-      git branch -M "public/${RELEASE_TAG}"
-      git push github "public/${RELEASE_TAG}"
-      git push github "${RELEASE_TAG}"
-      popd >/dev/null
-    displayName: "Publish cleaned release to GitHub"
-    env:
-      GITHUB_TOKEN: $(GITHUB_TOKEN)
-      GITHUB_REPO:  $(GITHUB_REPO)
-      GIT_USER_NAME:  $(GIT_USER_NAME)
-      GIT_USER_EMAIL: $(GIT_USER_EMAIL)
-    condition: succeeded()
