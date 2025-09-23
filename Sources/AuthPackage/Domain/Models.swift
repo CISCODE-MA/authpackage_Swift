@@ -37,9 +37,11 @@ public struct User: Codable, Equatable, Sendable {
 public struct Tokens: Codable, Equatable, Sendable {
     public var accessToken: String
     public var refreshToken: String?
+    public var expiry: Date?
 
     public init(accessToken: String, refreshToken: String?, expiry: Date? = nil) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
+        self.expiry = expiry
     }
 }
