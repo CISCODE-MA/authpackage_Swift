@@ -195,6 +195,7 @@ steps:
         extraProperties: |
           sonar.branch.name=$(Build.SourceBranchName)
           sonar.scm.revision=$(Build.SourceVersion)
+          sonar.projectVersion=$(Build.BuildNumber)
 
     - task: SonarCloudAnalyze@3
       displayName: "SonarCloud | Run analysis"
