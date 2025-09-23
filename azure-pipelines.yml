@@ -19,7 +19,6 @@ pool:
 variables:
 - group: AuthPackage-Secrets
 
-variables:
   CONFIG: release
 
   SONAR_ENABLED: 'true'
