@@ -19,7 +19,6 @@ pool:
   vmImage: macos-latest
 
 variables:
-- group: AuthPackage-Secrets
   GITHUB_DEFAULT_BRANCH: 'master'
   # Build mode for swift build (we build once more after tests)
   CONFIG: release
@@ -263,6 +262,17 @@ steps:
   # ---------------------------------------------
   # GitHub: push current build commit to default branch
   # ---------------------------------------------
+  
+  - script: |
+      echo "Repo: ${GITHUB_REPO}"
+      echo "Branch: ${GITHUB_DEFAULT_BRANCH}"
+      if [[ -n "${GITHUB_TOKEN:-}" ]]; then echo "Token: [present]"; else echo "Token: [missing]"; fi
+    displayName: "GitHub vars check"
+    env:
+      GITHUB_REPO: $(GITHUB_REPO)
+      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
+    
   - script: |
       set -euo pipefail
 
