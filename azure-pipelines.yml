@@ -256,3 +256,93 @@ steps:
       versionOption: custom
       versionPublish: '$(PACKAGE_VERSION)'
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
+      
+  # ---------------------------------------------
+  # Mirror commit + tag to GitHub, then create Release
+  # Append this block at the END of the pipeline
+  # ---------------------------------------------
+
+  # (Optional) centralize a couple of defaults
+  - script: |
+      echo "##vso[task.setvariable variable=GITHUB_REPO;issecret=false]ciscodeapps/AuthPackage"   # owner/repo
+      echo "##vso[task.setvariable variable=GITHUB_DEFAULT_BRANCH;issecret=false]master"
+    displayName: "GitHub: defaults (repo & branch)"
+    condition: succeeded()
+
+  # Push the built commit and tag to GitHub
+  - script: |
+      set -euo pipefail
+
+      # Inputs (can be overridden by pipeline vars)
+      : "${GITHUB_REPO:=$(GITHUB_REPO)}"
+      : "${GITHUB_DEFAULT_BRANCH:=$(GITHUB_DEFAULT_BRANCH)}"
+
+      echo "Configuring authenticated GitHub remote…"
+      git remote remove github 2>/dev/null || true
+      git remote add github "https://$(GITHUB_TOKEN)@github.com/${GITHUB_REPO}.git"
+
+      echo "Ensuring tags present locally…"
+      git fetch --tags github --force --prune
+
+      TAG="v$(PACKAGE_VERSION)"
+      if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+        echo "Tag ${TAG} already exists locally."
+      else
+        git tag -a "${TAG}" -m "AuthPackage ${TAG}"
+        echo "Created tag ${TAG}"
+      fi
+
+      echo "Pushing commit to GitHub branch ${GITHUB_DEFAULT_BRANCH} (fast-forward only)…"
+      git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
+  
+      echo "Pushing tag ${TAG} to GitHub…"
+      git push github "refs/tags/${TAG}"
+    displayName: "GitHub: push branch + tag"
+    condition: succeeded()
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+  # Create (or update) a GitHub Release and upload the built zip
+  - script: |
+      set -euo pipefail
+
+      : "${GITHUB_REPO:=$(GITHUB_REPO)}"
+      export GH_TOKEN="$(GITHUB_TOKEN)"
+      export GH_REPO="${GITHUB_REPO}"
+
+      echo "Authenticating gh..."
+      echo "$GH_TOKEN" | gh auth login --with-token
+
+      TAG="v$(PACKAGE_VERSION)"
+      TITLE="AuthPackage ${TAG}"
+
+      # Pick up the source package we zipped earlier
+      ASSET="$(ls dist/AuthPackage_src_*_v$(PACKAGE_VERSION)_*.zip | head -n1 || true)"
+      if [[ -z "$ASSET" ]]; then
+        echo "ERROR: Release asset not found in dist/. Did the packaging step run?"
+        exit 1
+      fi
+
+      # Use CHANGELOG if present; otherwise generate minimal notes
+      if [[ -f CHANGELOG.md ]]; then
+        NOTES_OPT=(--notes-file CHANGELOG.md)
+      else
+        printf "Release %s\n\nBuild: %s\nBranch: %s\nCommit: %s\n" \
+          "$TAG" "$(Build.BuildNumber)" "$(Build.SourceBranchName)" "$(Build.SourceVersion)" > /tmp/release-notes.txt
+        NOTES_OPT=(--notes-file /tmp/release-notes.txt)
+      fi
+
+      # Stable vs RC is driven by earlier step that set RELEASE_CHANNEL
+      if [[ "${RELEASE_CHANNEL:-rc}" == "stable" ]]; then
+        echo "Creating/updating STABLE GitHub Release ${TAG}…"
+        gh release create "$TAG" "$ASSET" --title "$TITLE" "${NOTES_OPT[@]}" --latest --verify-tag || \
+        gh release upload  "$TAG" "$ASSET" --clobber
+      else
+        echo "Creating/updating PRERELEASE ${TAG}…"
+        gh release create "$TAG" "$ASSET" --title "$TITLE" "${NOTES_OPT[@]}" --prerelease --verify-tag || \
+        gh release upload  "$TAG" "$ASSET" --clobber
+      fi
+    displayName: "GitHub: create Release + upload asset"
+    condition: succeeded()
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
