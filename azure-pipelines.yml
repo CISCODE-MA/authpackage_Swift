@@ -303,7 +303,7 @@ steps:
   - script: |
       set -euo pipefail
  
-      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
+      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"
       : "${GITHUB_DEFAULT_BRANCH:=master}"
 
       echo "Configuring authenticated GitHub remote…"
