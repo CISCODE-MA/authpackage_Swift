@@ -257,162 +257,37 @@ steps:
       versionPublish: '$(PACKAGE_VERSION)'
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
       
+ 
   # ---------------------------------------------
-  # GitHub mirror + release (handles empty repos)
+  # GitHub: push current build commit to default branch
   # ---------------------------------------------
-
-  # Preflight: empty repo & default branch alignment
   - script: |
       set -euo pipefail
 
-      # --- Guards ---
-      if [[ -z "${GITHUB_TOKEN:-}" || "${GITHUB_TOKEN:-}" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
-        echo "ERROR: GITHUB_TOKEN missing. Add a secret pipeline variable."; exit 1
-      fi
-
-      # --- Normalize Azure placeholders (e.g., '$(GITHUB_REPO)') ---
-      normalize_var() {
+      # --- Guard: fail if any required var is missing OR left as an Azure placeholder like $(VAR) ---
+      require_var() {
         local name="$1"
         local val="${!name:-}"
         if [[ -z "$val" || "$val" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
-          eval "unset $name"
+          echo "ERROR: Required variable '$name' is missing or unresolved. Set it in Pipeline variables."
+          exit 1
         fi
       }
-      normalize_var GITHUB_REPO
-      normalize_var GITHUB_DEFAULT_BRANCH
+      require_var GITHUB_TOKEN
+      require_var GITHUB_REPO
+      require_var GITHUB_DEFAULT_BRANCH
 
-      # --- Defaults (only applied if not provided) ---
-      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"      # owner/repo
-      : "${GITHUB_DEFAULT_BRANCH:=master}"             # change to 'main' if you prefer
-
-      export GH_TOKEN="$GITHUB_TOKEN"
-      export GH_REPO="$GITHUB_REPO"
-
-      echo "Configuring authenticated GitHub remote…"
+      echo "Configuring GitHub remote for ${GITHUB_REPO}…"
       git remote remove github 2>/dev/null || true
       git remote add github "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
 
-      echo "Checking if remote repo has any branches…"
-      if ! HEADS_RAW="$(git ls-remote --heads github 2>/dev/null)"; then
-        echo "ERROR: Could not query remote. Check repo '${GITHUB_REPO}' exists and PAT permissions."; exit 1
-      fi
-      HEADS_COUNT="$(printf "%s" "$HEADS_RAW" | wc -l | tr -d ' ')"
-      echo "Remote heads: ${HEADS_COUNT}"
-
-      if [[ "${HEADS_COUNT}" = "0" ]]; then
-        echo "Remote appears EMPTY. Pushing initial branch: ${GITHUB_DEFAULT_BRANCH}"
-        git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
-
-        echo "Setting GitHub default branch to ${GITHUB_DEFAULT_BRANCH}…"
-        echo "$GH_TOKEN" | gh auth login --with-token
-        gh repo edit "${GITHUB_REPO}" --default-branch "${GITHUB_DEFAULT_BRANCH}"
-        echo "Default branch set."
-      else
-        echo "Remote already has branches. Skipping default-branch change."
-      fi
-    displayName: "GitHub preflight: empty repo & default branch"
-    condition: succeeded()
-    env:
-      GITHUB_TOKEN: $(GITHUB_TOKEN)                     # secret (required)
-      GITHUB_REPO: $(GITHUB_REPO)                       # optional: owner/repo
-      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)   # optional: main/master
-
-  # Push the built commit and the version tag
-  - script: |
-      set -euo pipefail
-
-      if [[ -z "${GITHUB_TOKEN:-}" || "${GITHUB_TOKEN:-}" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
-        echo "ERROR: GITHUB_TOKEN missing."; exit 1
-      fi
-
-      normalize_var() {
-        local name="$1"
-        local val="${!name:-}"
-        if [[ -z "$val" || "$val" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
-          eval "unset $name"
-        fi
-      }
-      normalize_var GITHUB_REPO
-      normalize_var GITHUB_DEFAULT_BRANCH
-
-      : "${GITHUB_REPO:=CISCODE-MA/authpackage_swift}"
-      : "${GITHUB_DEFAULT_BRANCH:=master}"
-
-      git remote remove github 2>/dev/null || true
-      git remote add github "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
-
-      TAG="v${PACKAGE_VERSION}"
-      if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-        echo "Tag ${TAG} already exists locally."
-      else
-        git tag -a "${TAG}" -m "AuthPackage ${TAG}"
-        echo "Created tag ${TAG}"
-      fi
-
-      echo "Pushing commit to ${GITHUB_DEFAULT_BRANCH} (ff-only)…"
+      echo "Pushing current commit to ${GITHUB_REPO}:${GITHUB_DEFAULT_BRANCH} (fast-forward only)…"
       git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
-  
-      echo "Pushing tag ${TAG}…"
-      git push github "refs/tags/${TAG}"
-    displayName: "GitHub: push branch + tag"
+
+      echo "✅ Push complete."
+    displayName: "GitHub: push commit to default branch"
     condition: succeeded()
     env:
       GITHUB_TOKEN: $(GITHUB_TOKEN)
       GITHUB_REPO: $(GITHUB_REPO)
       GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)
-
-  # Create (or update) the GitHub Release and upload the packaged asset
-  - script: |
-      set -euo pipefail
-
-      if [[ -z "${GITHUB_TOKEN:-}" || "${GITHUB_TOKEN:-}" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
-        echo "ERROR: GITHUB_TOKEN missing."; exit 1
-      fi
-
-      normalize_var() {
-        local name="$1"
-        local val="${!name:-}"
-        if [[ -z "$val" || "$val" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
-          eval "unset $name"
-        fi
-      }
-      normalize_var GITHUB_REPO
-
-      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"
-      export GH_TOKEN="$GITHUB_TOKEN"
-      export GH_REPO="$GITHUB_REPO"
-
-      echo "Authenticating gh…"
-      echo "$GH_TOKEN" | gh auth login --with-token
-
-      TAG="v${PACKAGE_VERSION}"
-      TITLE="AuthPackage ${TAG}"
-  
-      ASSET="$(ls dist/AuthPackage_src_*_v${PACKAGE_VERSION}_*.zip | head -n1 || true)"
-      if [[ -z "$ASSET" ]]; then
-        echo "ERROR: could not find release asset ZIP in dist/. Did the packaging step run?"; exit 1
-      fi
-      echo "Attaching asset: $ASSET"
-
-      if [[ -f CHANGELOG.md ]]; then
-        NOTES_OPT=(--notes-file CHANGELOG.md)
-      else
-        printf "Release %s\n\nBuild: %s\nBranch: %s\nCommit: %s\n" \
-          "$TAG" "$(Build.BuildNumber)" "$(Build.SourceBranchName)" "$(Build.SourceVersion)" > /tmp/release-notes.txt
-        NOTES_OPT=(--notes-file /tmp/release-notes.txt)
-      fi
-
-      if [[ "${RELEASE_CHANNEL:-rc}" == "stable" ]]; then
-        echo "Creating/updating STABLE Release ${TAG}…"
-        gh release create "$TAG" "$ASSET" --title "$TITLE" "${NOTES_OPT[@]}" --latest --verify-tag || \
-        gh release upload  "$TAG" "$ASSET" --clobber
-      else
-        echo "Creating/updating PRERELEASE ${TAG}…"
-        gh release create "$TAG" "$ASSET" --title "$TITLE" "${NOTES_OPT[@]}" --prerelease --verify-tag || \
-        gh release upload  "$TAG" "$ASSET" --clobber
-      fi
-    displayName: "GitHub: create Release + upload asset"
-    condition: succeeded()
-    env:
-      GITHUB_TOKEN: $(GITHUB_TOKEN)
-      GITHUB_REPO: $(GITHUB_REPO)
