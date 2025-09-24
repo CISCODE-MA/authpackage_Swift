@@ -265,25 +265,34 @@ steps:
   - script: |
       set -euo pipefail
 
-      # Defaults (override by defining pipeline vars GITHUB_REPO / GITHUB_DEFAULT_BRANCH)
-      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"        # owner/repo
-      : "${GITHUB_DEFAULT_BRANCH:=master}"               # set to 'main' if you use main
-  
-      export GH_TOKEN="$(GITHUB_TOKEN)"
-      export GH_REPO="${GITHUB_REPO}"
+      # ---- Guards (fail early if secrets/vars missing) ----
+      if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        echo "ERROR: GITHUB_TOKEN is not set (secret pipeline variable required)"; exit 1
+      fi
 
+      # ---- Defaults (can be overridden via pipeline variables) ----
+      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"     # owner/repo
+      : "${GITHUB_DEFAULT_BRANCH:=master}"            
+
+      export GH_TOKEN="$GITHUB_TOKEN"
+      export GH_REPO="$GITHUB_REPO"
+ 
       echo "Configuring authenticated GitHub remote…"
       git remote remove github 2>/dev/null || true
-      git remote add github "https://$(GITHUB_TOKEN)@github.com/${GITHUB_REPO}.git"
+      git remote add github "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
 
       echo "Checking if remote repo has any branches…"
-      HEADS_COUNT="$(git ls-remote --heads github | wc -l | tr -d ' ')"
+      # Use the remote name we just added; if repo doesn't exist or creds bad, this will error
+      if ! HEADS_RAW="$(git ls-remote --heads github)"; then
+        echo "ERROR: Could not query remote. Check GITHUB_REPO='${GITHUB_REPO}' exists and PAT permissions."; exit 1
+      fi
+      HEADS_COUNT="$(printf "%s" "$HEADS_RAW" | wc -l | tr -d ' ')"
       echo "Remote heads: ${HEADS_COUNT}"
 
-      if [ "${HEADS_COUNT}" = "0" ]; then
+      if [[ "${HEADS_COUNT}" = "0" ]]; then
         echo "Remote appears EMPTY. Pushing initial branch: ${GITHUB_DEFAULT_BRANCH}"
         git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
-
+  
         echo "Setting GitHub default branch to ${GITHUB_DEFAULT_BRANCH}…"
         echo "$GH_TOKEN" | gh auth login --with-token
         gh repo edit "${GITHUB_REPO}" --default-branch "${GITHUB_DEFAULT_BRANCH}"
@@ -294,24 +303,26 @@ steps:
     displayName: "GitHub preflight: empty repo & default branch"
     condition: succeeded()
     env:
-      GITHUB_TOKEN: $(GITHUB_TOKEN)
-      # Optional overrides; leave empty to use script defaults:
-      GITHUB_REPO: $(GITHUB_REPO)
-      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)
+      GITHUB_TOKEN: $(GITHUB_TOKEN)                # secret var from pipeline
+      GITHUB_REPO: $(GITHUB_REPO)                  # optional override: owner/repo
+      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)  # optional override: main/master
 
   # Push the built commit and the version tag
   - script: |
       set -euo pipefail
- 
-      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"
+
+      if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        echo "ERROR: GITHUB_TOKEN is not set"; exit 1
+      fi
+
+      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
       : "${GITHUB_DEFAULT_BRANCH:=master}"
 
       echo "Configuring authenticated GitHub remote…"
       git remote remove github 2>/dev/null || true
-      git remote add github "https://$(GITHUB_TOKEN)@github.com/${GITHUB_REPO}.git"
+      git remote add github "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
 
-      echo "Ensuring tag exists locally…"
-      TAG="v$(PACKAGE_VERSION)"
+      TAG="v${PACKAGE_VERSION}"
       if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
         echo "Tag ${TAG} already exists locally."
       else
@@ -334,35 +345,35 @@ steps:
   # Create (or update) the GitHub Release and upload the packaged asset
   - script: |
       set -euo pipefail
- 
+  
+      if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        echo "ERROR: GITHUB_TOKEN is not set"; exit 1
+      fi
+
       : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
-      export GH_TOKEN="$(GITHUB_TOKEN)"
-      export GH_REPO="${GITHUB_REPO}"
+      export GH_TOKEN="$GITHUB_TOKEN"
+      export GH_REPO="$GITHUB_REPO"
 
       echo "Authenticating gh…"
       echo "$GH_TOKEN" | gh auth login --with-token
-
-      TAG="v$(PACKAGE_VERSION)"
+ 
+      TAG="v${PACKAGE_VERSION}"
       TITLE="AuthPackage ${TAG}"
-
-      # Locate the asset produced earlier
-      ASSET="$(ls dist/AuthPackage_src_*_v$(PACKAGE_VERSION)_*.zip | head -n1 || true)"
+  
+      ASSET="$(ls dist/AuthPackage_src_*_v${PACKAGE_VERSION}_*.zip | head -n1 || true)"
       if [[ -z "$ASSET" ]]; then
-        echo "ERROR: could not find release asset ZIP in dist/. Did the packaging step run?"
-        exit 1
+        echo "ERROR: could not find release asset ZIP in dist/. Did the packaging step run?"; exit 1
       fi
       echo "Attaching asset: $ASSET"
 
-      # Release notes: prefer CHANGELOG.md if present
       if [[ -f CHANGELOG.md ]]; then
         NOTES_OPT=(--notes-file CHANGELOG.md)
       else
         printf "Release %s\n\nBuild: %s\nBranch: %s\nCommit: %s\n" \
-          "$TAG" "$(Build.BuildNumber)" "$(Build.SourceBranchName)" "$(Build.SourceVersion)" > /tmp/release-notes.txt
+          "$TAG" "${Build.BuildNumber}" "${Build.SourceBranchName}" "${Build.SourceVersion}" > /tmp/release-notes.txt
         NOTES_OPT=(--notes-file /tmp/release-notes.txt)
       fi
 
-      # Stable vs prerelease based on RELEASE_CHANNEL from earlier step
       if [[ "${RELEASE_CHANNEL:-rc}" == "stable" ]]; then
         echo "Creating/updating STABLE Release ${TAG}…"
         gh release create "$TAG" "$ASSET" --title "$TITLE" "${NOTES_OPT[@]}" --latest --verify-tag || \
@@ -377,4 +388,3 @@ steps:
     env:
       GITHUB_TOKEN: $(GITHUB_TOKEN)
       GITHUB_REPO: $(GITHUB_REPO)
-  
