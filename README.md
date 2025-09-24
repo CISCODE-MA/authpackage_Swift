@@ -2,11 +2,11 @@
 
 > **Production-ready authentication** for Swift apps, with a strongly-typed core client and a drop-in SwiftUI flow.  
 > Includes email/password auth, password reset, and OAuth (Microsoft, Google, Facebook).  
-> This README is the **step-by-step integration guide**. It covers architecture, installation, configuration, OAuth setup, CI/CD, troubleshooting, and security.
+> This README is the **step-by-step integration guide**. It covers architecture, install, configuration, OAuth setup, CI/CD, troubleshooting, and security.
 
 ![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)
 ![iOS](https://img.shields.io/badge/iOS-15.0+-lightgrey.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
@@ -14,21 +14,21 @@
 
 1. [Architecture](#architecture)  
 2. [Requirements](#requirements)  
-3. [Installation (SPM)](#installation-spm)  
-4. [Quick Start](#quick-start)  
-5. [Configuration Reference](#configuration-reference)  
-6. [App URL Scheme (Info.plist)](#app-url-scheme-infoplist)  
-7. [OAuth Providers (Microsoft, Google, Facebook)](#oauth-providers-microsoft-google-facebook)  
-8. [Backend Contract](#backend-contract)  
-9. [Using the Core API Directly](#using-the-core-api-directly)  
-10. [Token Storage & Refresh](#token-storage--refresh)  
-11. [Post-Login Deeplink](#post-login-deeplink)  
-12. [Troubleshooting](#troubleshooting)  
-13. [Security Checklist](#security-checklist)  
-14. [CI/CD (Azure Pipelines)](#cicd-azure-pipelines)  
-15. [Versioning & Releases](#versioning--releases)  
-16. [Contributing](#contributing)  
-17. [License](#license)  
+3. [Install & Run (60s)](#-install--run-60s)  
+4. [Configuration Reference](#️-configuration-reference)  
+5. [App URL Scheme (Info.plist)](#-app-url-scheme-infoplist)  
+6. [OAuth Providers (Microsoft, Google, Facebook)](#-oauth-providers-microsoft-google-facebook)  
+7. [Backend Contract](#-backend-contract)  
+8. [Using the Core API Directly](#-using-the-core-api-directly)  
+9. [Token Storage & Refresh](#-token-storage--refresh)  
+10. [Post-Login Deeplink](#-post-login-deeplink)  
+11. [Troubleshooting](#-troubleshooting)  
+12. [Security Checklist](#-security-checklist)  
+13. [CI/CD (Azure Pipelines)](#-cicd-azure-pipelines)  
+14. [Versioning & Releases](#-versioning--releases)  
+15. [Changelog](#changelog)  
+16. [Contributing](#-contributing)  
+17. [License](#-license)  
 
 ---
 
@@ -74,82 +74,14 @@
 
 ---
 
-## ⚡ Installation (SPM)
+## ⚡ Install & Run (60s)
 
-1. Xcode → **File** → **Add Package Dependencies…**  
-2. Paste repo URL:  
-   ```
-   https://github.com/Zaiidmo/AuthPackage-Swift.git
-   ```
-3. Rule: **Up to Next Major** from `1.0.0`.  
-4. Add products: **AuthPackage**, **AuthPackageUI**.  
+### 1) Add package (SPM)
 
----
+Xcode → **File** → **Add Package Dependencies…** →  
+URL: `https://github.com/CISCODE-MA/AuthPackage-Swift.git` → Products: **AuthPackage**, **AuthPackageUI** → Version: **Up to Next Major** from `1.0.0`.
 
-## 🚀 Quick Start
-
-```swift
-import SwiftUI
-import AuthPackage
-import AuthPackageUI
-
-@main
-struct MyApp: App {
-  private let baseURL = URL(string: "http://localhost:3000")! // LAN IP/tunnel for device
-
-  private var ui: AuthUIConfig {
-    AuthUIConfig(
-      baseURL: baseURL,
-      appScheme: "authdemo",
-      microsoftEnabled: true,
-      googleEnabled: true,
-      facebookEnabled: true,
-      postLoginDeeplink: URL(string: "authdemo://home")
-    )
-  }
-
-  private var core: AuthConfiguration {
-    AuthConfiguration(
-      baseURL: baseURL,
-      refreshUsesCookie: true,
-      redirectScheme: "authdemo",
-      microsoftEnabled: true,
-      googleEnabled: true,
-      facebookEnabled: true
-    )
-  }
-
-  var body: some Scene {
-    WindowGroup {
-      let client = AuthClient(config: core)
-      AuthPackageUI.makeRoot(config: ui, client: client)
-    }
-  }
-}
-```
-
-> **Tip:** Devices can’t reach `localhost`. Use your LAN IP or HTTPS tunnel (ngrok, Cloudflare) and configure the backend + provider apps with the same host.
-
----
-
-## ⚙️ Configuration Reference
-
-### `AuthUIConfig` (UI module)
-- `baseURL: URL` — backend origin  
-- `appScheme: String` — app’s URL scheme (must be in Info.plist)  
-- `microsoftEnabled / googleEnabled / facebookEnabled: Bool` — toggle OAuth buttons  
-- `postLoginDeeplink: URL?` — open after login (optional)  
-- `cssVariables: String?` — theming (CSS-like tokens)  
-
-### `AuthConfiguration` (Core module)
-- `baseURL: URL`  
-- `refreshUsesCookie: Bool` — enable cookie-based refresh  
-- `redirectScheme: String?` — required for OAuth providers  
-- `microsoftEnabled / googleEnabled / facebookEnabled: Bool` — enable providers  
-
----
-
-## 🔑 App URL Scheme (Info.plist)
+### 2) Register your URL scheme (Info.plist)
 
 ```xml
 <key>CFBundleURLTypes</key>
@@ -157,11 +89,121 @@ struct MyApp: App {
   <dict>
     <key>CFBundleURLSchemes</key>
     <array>
-      <string>authdemo</string>
+      <string>authdemo</string> <!-- change to your scheme -->
     </array>
   </dict>
 </array>
 ```
+
+### 3) Show the drop-in UI (persistent client + post-login deeplink)
+
+```swift
+import SwiftUI
+import AuthPackage
+import AuthPackageUI
+
+enum AuthSecrets {
+  static let baseURL = URL(string: "https://YOUR-BACKEND.example.com")!
+  static let scheme  = "authdemo"              // must match Info.plist
+  static let keychainService = "com.example.AuthDemo"
+  static let keychainAccount = "auth"
+}
+
+enum AuthDependencies {
+  static let client: AuthClientProtocol = {
+    let cfg = AuthConfiguration(
+      baseURL: AuthSecrets.baseURL,
+      refreshUsesCookie: true,
+      redirectScheme: AuthSecrets.scheme,
+      microsoftEnabled: true,
+      googleEnabled: true,
+      facebookEnabled: true
+    )
+    let store = KeychainTokenStore(
+      service: AuthSecrets.keychainService,
+      account: AuthSecrets.keychainAccount
+    )
+    return AuthClient(config: cfg, tokenStore: store)
+  }()
+}
+
+@main
+struct MyApp: App {
+  private let client = AuthDependencies.client
+  @State private var showHome = false
+
+  var body: some Scene {
+    WindowGroup {
+      Group {
+        if showHome {
+          Text("Home") // replace with your HomeView
+        } else {
+          AuthPackageUI.makeRoot(
+            config: AuthUIConfig(
+              baseURL: AuthSecrets.baseURL,
+              appScheme: AuthSecrets.scheme,
+              microsoftEnabled: true,
+              googleEnabled: true,
+              facebookEnabled: true,
+              cssVariables: """
+              :root {
+                --authui-primary-color: #B53CC2;
+                --authui-accent-color:  #D078FF;
+                --authui-background-color: #1F1F1F;
+                --authui-text-color:     #ffffff;
+                --authui-corner-radius: 8;
+                --authui-spacing:       14;
+                --authui-font-family:   Poppins;
+                --authui-title-size:    28;
+                --authui-body-size:     17;
+              }
+              """,
+              postLoginDeeplink: URL(string: "\(AuthSecrets.scheme)://home")
+            ),
+            client: client
+          )
+        }
+      }
+      .onAppear {
+        if let t = client.tokens?.accessToken, !t.isEmpty { showHome = true }
+      }
+      .onOpenURL { url in
+        guard url.scheme == AuthSecrets.scheme else { return }
+        if url.host == "home" { showHome = true }
+      }
+    }
+  }
+}
+```
+
+> **Device tip:** real devices can’t reach `localhost`. Use your LAN IP or an HTTPS tunnel (ngrok, Cloudflare), and ensure your backend + provider apps use the same host in their redirect URLs.
+
+---
+
+## ⚙️ Configuration Reference
+
+### `AuthUIConfig` (UI module)
+| Property | Type | Notes |
+|---|---|---|
+| `baseURL` | `URL` | Backend origin |
+| `appScheme` | `String` | Must match Info.plist scheme |
+| `microsoftEnabled` / `googleEnabled` / `facebookEnabled` | `Bool` | Toggle OAuth buttons |
+| `postLoginDeeplink` | `URL?` | Open after login (optional) |
+| `cssVariables` | `String?` | CSS-like theme tokens |
+
+### `AuthConfiguration` (Core module)
+| Property | Type | Notes |
+|---|---|---|
+| `baseURL` | `URL` | Backend origin |
+| `refreshUsesCookie` | `Bool` | Enable cookie-based refresh |
+| `redirectScheme` | `String?` | Required for OAuth flows |
+| `microsoftEnabled` / `googleEnabled` / `facebookEnabled` | `Bool` | Enable providers |
+
+---
+
+## 🔑 App URL Scheme (Info.plist)
+
+> Already shown in **Install & Run**. Ensure your scheme matches `appScheme` and provider redirect URIs.
 
 ---
 
@@ -191,6 +233,8 @@ All follow the same flow:
 - `GET /api/auth/{provider}?redirect=<scheme>://auth/callback`  
 - `GET /api/auth/{provider}/callback` → 302 with tokens  
 - `POST /api/auth/{provider}/exchange` (native SDK → app tokens)  
+
+> Keep endpoint names consistent across login/register (either use `/api/auth/**` or `/api/clients/**` for both).
 
 ---
 
@@ -267,52 +311,10 @@ If `postLoginDeeplink` is set, the UI opens it after success. Handle in your app
 - Pre-releases via `release` branch → `NEXT_MINOR.0-rc.YYYYMMDD.BUILDID`  
 - See [CHANGELOG.md](CHANGELOG.md) for details  
 
----
-
-## 🤝 Contributing
-
-- Open issues for bugs/feature requests  
-- Fork & PR  
-- Run `swift test` before pushing  
-- Follow forthcoming `CONTRIBUTING.md`  
-
----
-
-## 📜 License
-
-Licensed under the [MIT License](LICENSE.md).  
-© 2025 AuthPackage contributors
-
----
-
-## Contributing
-
-We welcome contributions! Please read the [Contributing Guide](CONTRIBUTING.md) before opening an issue or pull request.
-It explains our branching model, coding standards, commit message conventions, and how to run tests locally.
-
-- **Pull Requests:** For all changes, open a PR targeting the default branch and ensure CI checks pass.
-- **Conventional Commits:** Please use the [Conventional Commits](https://www.conventionalcommits.org/) format (e.g. `feat:`, `fix:`, `docs:`). This powers automated changelog generation.
-- **Code of Conduct:** Be respectful and constructive. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (if present).
-
-## Changelog
-
-We maintain a human-friendly changelog in [CHANGELOG.md](CHANGELOG.md) following the
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and [Semantic Versioning](https://semver.org/).
-
-- **Latest release:** See the [releases](https://github.com/your-org/your-repo/releases) page.
-- **Unreleased changes:** Tracked under the **[Unreleased]** section until a version is tagged.
-
-## Releases & Versioning
-
-This project follows **Semantic Versioning** (`MAJOR.MINOR.PATCH`). Release automation is driven by CI:
-- **Release tags:** Create an annotated tag `vX.Y.Z` on the default branch to publish a stable release.
-- **RC builds:** Commits on the `release` branch produce RC versions like `X.(MINOR+1).0-rc.YYYYMMDD.BUILDID`.
-- **Artifacts:** CI attaches source archives and publishes coverage; see pipeline details in `/azure-pipelines.yml`.
-
 ### First Official Release (resetting history of tags)
 
-If you want to make this repository's **first official open-source release** and **discard all previous tags**:
-> ⚠️ Note: This rewrites *tag history only*; it does **not** rewrite commit history.
+If you want to make this repository's **first official open-source release** and **discard all previous tags**:  
+> ⚠️ This rewrites *tag history only*; it does **not** rewrite commit history.
 
 1. **Delete old tags locally:**
    ```bash
@@ -320,7 +322,6 @@ If you want to make this repository's **first official open-source release** and
    ```
 2. **Delete old tags on origin (GitHub):**
    ```bash
-   # Delete all remote tags in bulk
    git ls-remote --tags origin | awk '{print $2}' | sed "s#refs/tags/##" | xargs -n 1 -I {} git push origin :refs/tags/{}
    ```
 3. **Create the first official tag and push it:**
@@ -329,14 +330,33 @@ If you want to make this repository's **first official open-source release** and
    git tag -a "v${VERSION}" -m "AuthPackage v${VERSION} — first public release"
    git push origin "refs/tags/v${VERSION}"
    ```
-4. **Update the changelog:** Move items from **[Unreleased]** into **[v${VERSION} - 2025-09-24]** in `CHANGELOG.md`.
+4. **Update the changelog:** Move items from **[Unreleased]** into **[v${VERSION} - YYYY-MM-DD]** in `CHANGELOG.md`.
 
-> Tip: If your default branch is protected, grant your CI GitHub App permission to push the tag or create the tag via a PR merged commit.
+> If your default branch is protected, grant your CI GitHub App permission to push the tag or create the tag via a PR merged commit.
 
-## Security
+---
 
-If you discover a security issue, please **do not** open a public issue. Email the maintainers or follow the security policy if available in `SECURITY.md`.
+## Changelog
 
-## License
+We maintain a human-friendly changelog in [CHANGELOG.md](CHANGELOG.md) following the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and [Semantic Versioning](https://semver.org/).
 
-This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
+- **Latest release:** See the repo **Releases** page.
+- **Unreleased changes:** Tracked under the **[Unreleased]** section until a version is tagged.
+
+---
+
+## 🤝 Contributing
+
+Please read the [Contributing Guide](CONTRIBUTING.md) before opening an issue or pull request. It explains our branching model, coding standards, commit message conventions, and how to run tests locally.
+
+- **Pull Requests:** Open a PR targeting the default branch and ensure CI checks pass.
+- **Conventional Commits:** Use the [Conventional Commits](https://www.conventionalcommits.org/) format (e.g. `feat:`, `fix:`, `docs:`). This powers automated changelog generation.
+- **Code of Conduct:** Be respectful and constructive. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+---
+
+## 📜 License
+
+Licensed under the [MIT License](LICENSE).  
+© 2025 AuthPackage contributors
