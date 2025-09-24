@@ -281,4 +281,62 @@ If `postLoginDeeplink` is set, the UI opens it after success. Handle in your app
 ## 📜 License
 
 Licensed under the [MIT License](LICENSE.md).  
-© 2025 AuthPackage contributors  
+© 2025 AuthPackage contributors
+
+---
+
+## Contributing
+
+We welcome contributions! Please read the [Contributing Guide](CONTRIBUTING.md) before opening an issue or pull request.
+It explains our branching model, coding standards, commit message conventions, and how to run tests locally.
+
+- **Pull Requests:** For all changes, open a PR targeting the default branch and ensure CI checks pass.
+- **Conventional Commits:** Please use the [Conventional Commits](https://www.conventionalcommits.org/) format (e.g. `feat:`, `fix:`, `docs:`). This powers automated changelog generation.
+- **Code of Conduct:** Be respectful and constructive. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (if present).
+
+## Changelog
+
+We maintain a human-friendly changelog in [CHANGELOG.md](CHANGELOG.md) following the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format and [Semantic Versioning](https://semver.org/).
+
+- **Latest release:** See the [releases](https://github.com/your-org/your-repo/releases) page.
+- **Unreleased changes:** Tracked under the **[Unreleased]** section until a version is tagged.
+
+## Releases & Versioning
+
+This project follows **Semantic Versioning** (`MAJOR.MINOR.PATCH`). Release automation is driven by CI:
+- **Release tags:** Create an annotated tag `vX.Y.Z` on the default branch to publish a stable release.
+- **RC builds:** Commits on the `release` branch produce RC versions like `X.(MINOR+1).0-rc.YYYYMMDD.BUILDID`.
+- **Artifacts:** CI attaches source archives and publishes coverage; see pipeline details in `/azure-pipelines.yml`.
+
+### First Official Release (resetting history of tags)
+
+If you want to make this repository's **first official open-source release** and **discard all previous tags**:
+> ⚠️ Note: This rewrites *tag history only*; it does **not** rewrite commit history.
+
+1. **Delete old tags locally:**
+   ```bash
+   git tag -l | xargs -n 1 git tag -d
+   ```
+2. **Delete old tags on origin (GitHub):**
+   ```bash
+   # Delete all remote tags in bulk
+   git ls-remote --tags origin | awk '{print $2}' | sed "s#refs/tags/##" | xargs -n 1 -I {} git push origin :refs/tags/{}
+   ```
+3. **Create the first official tag and push it:**
+   ```bash
+   export VERSION=1.0.0
+   git tag -a "v${VERSION}" -m "AuthPackage v${VERSION} — first public release"
+   git push origin "refs/tags/v${VERSION}"
+   ```
+4. **Update the changelog:** Move items from **[Unreleased]** into **[v${VERSION} - 2025-09-24]** in `CHANGELOG.md`.
+
+> Tip: If your default branch is protected, grant your CI GitHub App permission to push the tag or create the tag via a PR merged commit.
+
+## Security
+
+If you discover a security issue, please **do not** open a public issue. Email the maintainers or follow the security policy if available in `SECURITY.md`.
+
+## License
+
+This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
