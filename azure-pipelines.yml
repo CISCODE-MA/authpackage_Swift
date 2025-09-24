@@ -282,7 +282,7 @@ steps:
       normalize_var GITHUB_DEFAULT_BRANCH
 
       # --- Defaults (only applied if not provided) ---
-      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"      # owner/repo
+      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"      # owner/repo
       : "${GITHUB_DEFAULT_BRANCH:=master}"             # change to 'main' if you prefer
 
       export GH_TOKEN="$GITHUB_TOKEN"
@@ -335,7 +335,7 @@ steps:
       normalize_var GITHUB_REPO
       normalize_var GITHUB_DEFAULT_BRANCH
 
-      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
+      : "${GITHUB_REPO:=CISCODE-MA/authpackage_swift}"
       : "${GITHUB_DEFAULT_BRANCH:=master}"
 
       git remote remove github 2>/dev/null || true
@@ -378,7 +378,7 @@ steps:
       }
       normalize_var GITHUB_REPO
 
-      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
+      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"
       export GH_TOKEN="$GITHUB_TOKEN"
       export GH_REPO="$GITHUB_REPO"
 
