@@ -261,30 +261,40 @@ steps:
   # GitHub mirror + release (handles empty repos)
   # ---------------------------------------------
 
-  # Preflight: handle empty GitHub repo and default-branch alignment
+  # Preflight: empty repo & default branch alignment
   - script: |
       set -euo pipefail
 
-      # ---- Guards (fail early if secrets/vars missing) ----
-      if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        echo "ERROR: GITHUB_TOKEN is not set (secret pipeline variable required)"; exit 1
+      # --- Guards ---
+      if [[ -z "${GITHUB_TOKEN:-}" || "${GITHUB_TOKEN:-}" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
+        echo "ERROR: GITHUB_TOKEN missing. Add a secret pipeline variable."; exit 1
       fi
 
-      # ---- Defaults (can be overridden via pipeline variables) ----
-      : "${GITHUB_REPO:=CISCODE-MA/authpackage_Swift}"     # owner/repo
-      : "${GITHUB_DEFAULT_BRANCH:=master}"            
+      # --- Normalize Azure placeholders (e.g., '$(GITHUB_REPO)') ---
+      normalize_var() {
+        local name="$1"
+        local val="${!name:-}"
+        if [[ -z "$val" || "$val" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
+          eval "unset $name"
+        fi
+      }
+      normalize_var GITHUB_REPO
+      normalize_var GITHUB_DEFAULT_BRANCH
+
+      # --- Defaults (only applied if not provided) ---
+      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"      # owner/repo
+      : "${GITHUB_DEFAULT_BRANCH:=master}"             # change to 'main' if you prefer
 
       export GH_TOKEN="$GITHUB_TOKEN"
       export GH_REPO="$GITHUB_REPO"
- 
+
       echo "Configuring authenticated GitHub remote…"
       git remote remove github 2>/dev/null || true
       git remote add github "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
 
       echo "Checking if remote repo has any branches…"
-      # Use the remote name we just added; if repo doesn't exist or creds bad, this will error
-      if ! HEADS_RAW="$(git ls-remote --heads github)"; then
-        echo "ERROR: Could not query remote. Check GITHUB_REPO='${GITHUB_REPO}' exists and PAT permissions."; exit 1
+      if ! HEADS_RAW="$(git ls-remote --heads github 2>/dev/null)"; then
+        echo "ERROR: Could not query remote. Check repo '${GITHUB_REPO}' exists and PAT permissions."; exit 1
       fi
       HEADS_COUNT="$(printf "%s" "$HEADS_RAW" | wc -l | tr -d ' ')"
       echo "Remote heads: ${HEADS_COUNT}"
@@ -292,7 +302,7 @@ steps:
       if [[ "${HEADS_COUNT}" = "0" ]]; then
         echo "Remote appears EMPTY. Pushing initial branch: ${GITHUB_DEFAULT_BRANCH}"
         git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
-  
+
         echo "Setting GitHub default branch to ${GITHUB_DEFAULT_BRANCH}…"
         echo "$GH_TOKEN" | gh auth login --with-token
         gh repo edit "${GITHUB_REPO}" --default-branch "${GITHUB_DEFAULT_BRANCH}"
@@ -303,22 +313,31 @@ steps:
     displayName: "GitHub preflight: empty repo & default branch"
     condition: succeeded()
     env:
-      GITHUB_TOKEN: $(GITHUB_TOKEN)                # secret var from pipeline
-      GITHUB_REPO: $(GITHUB_REPO)                  # optional override: owner/repo
-      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)  # optional override: main/master
+      GITHUB_TOKEN: $(GITHUB_TOKEN)                     # secret (required)
+      GITHUB_REPO: $(GITHUB_REPO)                       # optional: owner/repo
+      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)   # optional: main/master
 
   # Push the built commit and the version tag
   - script: |
       set -euo pipefail
 
-      if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        echo "ERROR: GITHUB_TOKEN is not set"; exit 1
+      if [[ -z "${GITHUB_TOKEN:-}" || "${GITHUB_TOKEN:-}" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
+        echo "ERROR: GITHUB_TOKEN missing."; exit 1
       fi
+
+      normalize_var() {
+        local name="$1"
+        local val="${!name:-}"
+        if [[ -z "$val" || "$val" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
+          eval "unset $name"
+        fi
+      }
+      normalize_var GITHUB_REPO
+      normalize_var GITHUB_DEFAULT_BRANCH
 
       : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
       : "${GITHUB_DEFAULT_BRANCH:=master}"
 
-      echo "Configuring authenticated GitHub remote…"
       git remote remove github 2>/dev/null || true
       git remote add github "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
 
@@ -330,9 +349,9 @@ steps:
         echo "Created tag ${TAG}"
       fi
 
-      echo "Pushing commit to ${GITHUB_DEFAULT_BRANCH} (fast-forward only)…"
+      echo "Pushing commit to ${GITHUB_DEFAULT_BRANCH} (ff-only)…"
       git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
-
+  
       echo "Pushing tag ${TAG}…"
       git push github "refs/tags/${TAG}"
     displayName: "GitHub: push branch + tag"
@@ -345,10 +364,19 @@ steps:
   # Create (or update) the GitHub Release and upload the packaged asset
   - script: |
       set -euo pipefail
-  
-      if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        echo "ERROR: GITHUB_TOKEN is not set"; exit 1
+
+      if [[ -z "${GITHUB_TOKEN:-}" || "${GITHUB_TOKEN:-}" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
+        echo "ERROR: GITHUB_TOKEN missing."; exit 1
       fi
+
+      normalize_var() {
+        local name="$1"
+        local val="${!name:-}"
+        if [[ -z "$val" || "$val" =~ ^\$\([A-Za-z0-9_.-]+\)$ ]]; then
+          eval "unset $name"
+        fi
+      }
+      normalize_var GITHUB_REPO
 
       : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
       export GH_TOKEN="$GITHUB_TOKEN"
@@ -356,7 +384,7 @@ steps:
 
       echo "Authenticating gh…"
       echo "$GH_TOKEN" | gh auth login --with-token
- 
+
       TAG="v${PACKAGE_VERSION}"
       TITLE="AuthPackage ${TAG}"
   
@@ -370,7 +398,7 @@ steps:
         NOTES_OPT=(--notes-file CHANGELOG.md)
       else
         printf "Release %s\n\nBuild: %s\nBranch: %s\nCommit: %s\n" \
-          "$TAG" "${Build.BuildNumber}" "${Build.SourceBranchName}" "${Build.SourceVersion}" > /tmp/release-notes.txt
+          "$TAG" "$(Build.BuildNumber)" "$(Build.SourceBranchName)" "$(Build.SourceVersion)" > /tmp/release-notes.txt
         NOTES_OPT=(--notes-file /tmp/release-notes.txt)
       fi
 
