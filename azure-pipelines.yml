@@ -258,32 +258,59 @@ steps:
       packagePublishDescription: 'AuthPackage source + coverage from $(Build.SourceVersion)'
       
   # ---------------------------------------------
-  # Mirror commit + tag to GitHub, then create Release
-  # Append this block at the END of the pipeline
+  # GitHub mirror + release (handles empty repos)
   # ---------------------------------------------
 
-  # (Optional) centralize a couple of defaults
-  - script: |
-      echo "##vso[task.setvariable variable=GITHUB_REPO;issecret=false]ciscodeapps/AuthPackage"   # owner/repo
-      echo "##vso[task.setvariable variable=GITHUB_DEFAULT_BRANCH;issecret=false]master"
-    displayName: "GitHub: defaults (repo & branch)"
-    condition: succeeded()
-
-  # Push the built commit and tag to GitHub
+  # Preflight: handle empty GitHub repo and default-branch alignment
   - script: |
       set -euo pipefail
 
-      # Inputs (can be overridden by pipeline vars)
-      : "${GITHUB_REPO:=$(GITHUB_REPO)}"
-      : "${GITHUB_DEFAULT_BRANCH:=$(GITHUB_DEFAULT_BRANCH)}"
+      # Defaults (override by defining pipeline vars GITHUB_REPO / GITHUB_DEFAULT_BRANCH)
+      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"        # owner/repo
+      : "${GITHUB_DEFAULT_BRANCH:=master}"               # set to 'main' if you use main
+  
+      export GH_TOKEN="$(GITHUB_TOKEN)"
+      export GH_REPO="${GITHUB_REPO}"
 
       echo "Configuring authenticated GitHub remote…"
       git remote remove github 2>/dev/null || true
       git remote add github "https://$(GITHUB_TOKEN)@github.com/${GITHUB_REPO}.git"
 
-      echo "Ensuring tags present locally…"
-      git fetch --tags github --force --prune
+      echo "Checking if remote repo has any branches…"
+      HEADS_COUNT="$(git ls-remote --heads github | wc -l | tr -d ' ')"
+      echo "Remote heads: ${HEADS_COUNT}"
 
+      if [ "${HEADS_COUNT}" = "0" ]; then
+        echo "Remote appears EMPTY. Pushing initial branch: ${GITHUB_DEFAULT_BRANCH}"
+        git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
+
+        echo "Setting GitHub default branch to ${GITHUB_DEFAULT_BRANCH}…"
+        echo "$GH_TOKEN" | gh auth login --with-token
+        gh repo edit "${GITHUB_REPO}" --default-branch "${GITHUB_DEFAULT_BRANCH}"
+        echo "Default branch set."
+      else
+        echo "Remote already has branches. Skipping default-branch change."
+      fi
+    displayName: "GitHub preflight: empty repo & default branch"
+    condition: succeeded()
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
+      # Optional overrides; leave empty to use script defaults:
+      GITHUB_REPO: $(GITHUB_REPO)
+      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)
+
+  # Push the built commit and the version tag
+  - script: |
+      set -euo pipefail
+ 
+      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
+      : "${GITHUB_DEFAULT_BRANCH:=master}"
+
+      echo "Configuring authenticated GitHub remote…"
+      git remote remove github 2>/dev/null || true
+      git remote add github "https://$(GITHUB_TOKEN)@github.com/${GITHUB_REPO}.git"
+
+      echo "Ensuring tag exists locally…"
       TAG="v$(PACKAGE_VERSION)"
       if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
         echo "Tag ${TAG} already exists locally."
@@ -292,38 +319,41 @@ steps:
         echo "Created tag ${TAG}"
       fi
 
-      echo "Pushing commit to GitHub branch ${GITHUB_DEFAULT_BRANCH} (fast-forward only)…"
+      echo "Pushing commit to ${GITHUB_DEFAULT_BRANCH} (fast-forward only)…"
       git push github "HEAD:refs/heads/${GITHUB_DEFAULT_BRANCH}"
-  
-      echo "Pushing tag ${TAG} to GitHub…"
+
+      echo "Pushing tag ${TAG}…"
       git push github "refs/tags/${TAG}"
     displayName: "GitHub: push branch + tag"
     condition: succeeded()
     env:
       GITHUB_TOKEN: $(GITHUB_TOKEN)
+      GITHUB_REPO: $(GITHUB_REPO)
+      GITHUB_DEFAULT_BRANCH: $(GITHUB_DEFAULT_BRANCH)
 
-  # Create (or update) a GitHub Release and upload the built zip
+  # Create (or update) the GitHub Release and upload the packaged asset
   - script: |
       set -euo pipefail
-
-      : "${GITHUB_REPO:=$(GITHUB_REPO)}"
+ 
+      : "${GITHUB_REPO:=ciscodeapps/AuthPackage}"
       export GH_TOKEN="$(GITHUB_TOKEN)"
       export GH_REPO="${GITHUB_REPO}"
 
-      echo "Authenticating gh..."
+      echo "Authenticating gh…"
       echo "$GH_TOKEN" | gh auth login --with-token
 
       TAG="v$(PACKAGE_VERSION)"
       TITLE="AuthPackage ${TAG}"
 
-      # Pick up the source package we zipped earlier
+      # Locate the asset produced earlier
       ASSET="$(ls dist/AuthPackage_src_*_v$(PACKAGE_VERSION)_*.zip | head -n1 || true)"
       if [[ -z "$ASSET" ]]; then
-        echo "ERROR: Release asset not found in dist/. Did the packaging step run?"
+        echo "ERROR: could not find release asset ZIP in dist/. Did the packaging step run?"
         exit 1
       fi
+      echo "Attaching asset: $ASSET"
 
-      # Use CHANGELOG if present; otherwise generate minimal notes
+      # Release notes: prefer CHANGELOG.md if present
       if [[ -f CHANGELOG.md ]]; then
         NOTES_OPT=(--notes-file CHANGELOG.md)
       else
@@ -332,9 +362,9 @@ steps:
         NOTES_OPT=(--notes-file /tmp/release-notes.txt)
       fi
 
-      # Stable vs RC is driven by earlier step that set RELEASE_CHANNEL
+      # Stable vs prerelease based on RELEASE_CHANNEL from earlier step
       if [[ "${RELEASE_CHANNEL:-rc}" == "stable" ]]; then
-        echo "Creating/updating STABLE GitHub Release ${TAG}…"
+        echo "Creating/updating STABLE Release ${TAG}…"
         gh release create "$TAG" "$ASSET" --title "$TITLE" "${NOTES_OPT[@]}" --latest --verify-tag || \
         gh release upload  "$TAG" "$ASSET" --clobber
       else
@@ -346,3 +376,5 @@ steps:
     condition: succeeded()
     env:
       GITHUB_TOKEN: $(GITHUB_TOKEN)
+      GITHUB_REPO: $(GITHUB_REPO)
+  
