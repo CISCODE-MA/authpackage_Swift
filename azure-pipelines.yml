@@ -19,23 +19,37 @@ pool:
   vmImage: macos-latest
 
 variables:
-  GITHUB_DEFAULT_BRANCH: 'master'
-  # Build mode for swift build (we build once more after tests)
-  CONFIG: release
+  # Link Library variable group (must contain: GITHUB_TOKEN [secret], GITHUB_REPO)
+  - group: AuthPackage-Secrets
+
+  # Your pipeline variables (converted to list style)
+  - name: GITHUB_DEFAULT_BRANCH
+    value: main          # <-- set to your actual default branch
+
+  - name: CONFIG
+    value: release
 
   # SonarCloud
-  SONAR_ENABLED: 'true'
-  SONARQ_ENDPOINT: 'sonarcloud-authpackage'
-  SONAR_ORG: "ciscode"
-  SONAR_PROJECT_KEY: 'CISCODEAPPS_pkg-ios-auth'
-  SONAR_PROJECT_NAME: 'pkg-ios-auth'
+  - name: SONAR_ENABLED
+    value: 'true'
+  - name: SONARQ_ENDPOINT
+    value: 'sonarcloud-authpackage'
+  - name: SONAR_ORG
+    value: 'ciscode'
+  - name: SONAR_PROJECT_KEY
+    value: 'CISCODEAPPS_pkg-ios-auth'
+  - name: SONAR_PROJECT_NAME
+    value: 'pkg-ios-auth'
 
   # Azure Artifacts feed (optional)
-  FEED_PATH: '$(System.TeamProject)/ios-packages'
-  PACKAGE_NAME: 'authpackage'
+  - name: FEED_PATH
+    value: '$(System.TeamProject)/ios-packages'
+  - name: PACKAGE_NAME
+    value: 'authpackage'
 
   # Will be overridden by version resolver
-  PACKAGE_VERSION: '0.0.0-rc.0'
+  - name: PACKAGE_VERSION
+    value: '0.0.0-rc.0'
 
 steps:
   # Ensure later git commands reuse OAuth token
