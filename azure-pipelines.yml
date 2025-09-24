@@ -24,7 +24,7 @@ variables:
 
   # Your pipeline variables (converted to list style)
   - name: GITHUB_DEFAULT_BRANCH
-    value: main          # <-- set to your actual default branch
+    value: main          
 
   - name: CONFIG
     value: release
