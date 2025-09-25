@@ -79,7 +79,7 @@
 ### 1) Add package (SPM)
 
 Xcode → **File** → **Add Package Dependencies…** →  
-URL: `https://github.com/Zaiidmo/AuthPackage-swift.git` → Products: **AuthPackage**, **AuthPackageUI** → Version: **Up to Next Major** from `1.0.0`.
+URL: `https://github.com/CISCODE-MA/AuthPackage-Swift.git` → Products: **AuthPackage**, **AuthPackageUI** → Version: **Up to Next Major** from `1.0.0`.
 
 ### 2) Register your URL scheme (Info.plist)
 
