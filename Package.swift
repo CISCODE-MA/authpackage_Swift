@@ -26,7 +26,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AuthPackageTests",
-            dependencies: ["AuthPackage"],
+            dependencies: ["AuthPackage", "AuthPackageUI"],
             path: "Tests/AuthPackageTests"
         ),
         .testTarget(
