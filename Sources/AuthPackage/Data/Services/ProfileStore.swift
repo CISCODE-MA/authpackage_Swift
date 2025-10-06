@@ -7,14 +7,14 @@
 
 import Foundation
 
-public protocol ProfileStore {
+public protocol ProfileStore: Sendable {
     func load() async throws -> UserProfile
     func save(_ profile: UserProfile) async throws -> UserProfile
 }
 
 /// In-memory implementation so the feature works immediately.
 /// Swap this with a real remote-backed store later without touching UI.
-public final class InMemoryProfileStore: ProfileStore {
+public actor InMemoryProfileStore: ProfileStore {
     private var profile: UserProfile
 
     public init(seed: UserProfile) { self.profile = seed }

@@ -25,7 +25,7 @@ public enum ProfileVMState: Equatable {
 }
 
 public final class ProfileViewModel: ObservableObject {
-  private let store: ProfileStore
+  private let store: any ProfileStore
 
   @Published public private(set) var state: ProfileVMState = .idle
   @Published public private(set) var isSaving = false
