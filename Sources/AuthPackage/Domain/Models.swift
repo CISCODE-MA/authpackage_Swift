@@ -12,7 +12,7 @@ public struct User: Codable, Equatable, Sendable {
     public let id: String
     public let email: String
     public let name: String?
-    public let tenantId: String?          // backend may omit; keep optional
+    public let tenantId: String?  // backend may omit; keep optional
     public let roles: [String]
     public let permissions: [String]
 
@@ -39,9 +39,27 @@ public struct Tokens: Codable, Equatable, Sendable {
     public var refreshToken: String?
     public var expiry: Date?
 
-    public init(accessToken: String, refreshToken: String?, expiry: Date? = nil) {
+    public init(accessToken: String, refreshToken: String?, expiry: Date? = nil)
+    {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.expiry = expiry
     }
+}
+
+// MARK: - UserProfile 
+public struct UserProfile: Codable, Equatable {
+  public var id: UUID
+  public var avatarURL: URL?
+  public var username: String
+  public var email: String
+  public var phoneNumber: String?
+
+  public init(id: UUID, avatarURL: URL? = nil, username: String, email: String, phoneNumber: String? = nil) {
+    self.id = id
+    self.avatarURL = avatarURL
+    self.username = username
+    self.email = email
+    self.phoneNumber = phoneNumber
+  }
 }
