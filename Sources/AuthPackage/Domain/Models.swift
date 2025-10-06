@@ -48,7 +48,7 @@ public struct Tokens: Codable, Equatable, Sendable {
 }
 
 // MARK: - UserProfile 
-public struct UserProfile: Codable, Equatable {
+public struct UserProfile: Codable, Equatable, Sendable {
   public var id: UUID
   public var avatarURL: URL?
   public var username: String
