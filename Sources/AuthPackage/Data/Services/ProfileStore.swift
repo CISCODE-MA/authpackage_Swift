@@ -5,24 +5,24 @@
 //  Created by Zaid MOUMNI on 06/10/2025.
 //
 
-
 import Foundation
 
 public protocol ProfileStore {
-  func load() async throws -> UserProfile
-  func save(_ profile: UserProfile, avatarJPEG: Data?) async throws -> UserProfile
+    func load() async throws -> UserProfile
+    func save(_ profile: UserProfile) async throws -> UserProfile
 }
 
-// In-memory default so you can run immediately.
+/// In-memory implementation so the feature works immediately.
+/// Swap this with a real remote-backed store later without touching UI.
 public final class InMemoryProfileStore: ProfileStore {
-  private var profile: UserProfile
-  public init(seed: UserProfile) { self.profile = seed }
+    private var profile: UserProfile
 
-  public func load() async throws -> UserProfile { profile }
+    public init(seed: UserProfile) { self.profile = seed }
 
-  public func save(_ p: UserProfile, avatarJPEG: Data?) async throws -> UserProfile {
-    // Ignore avatar bytes in this stub; just keep the URL if present.
-    profile = p
-    return profile
-  }
+    public func load() async throws -> UserProfile { profile }
+
+    public func save(_ p: UserProfile) async throws -> UserProfile {
+        profile = p
+        return p
+    }
 }

@@ -55,11 +55,35 @@ public struct UserProfile: Codable, Equatable, Sendable {
   public var email: String
   public var phoneNumber: String?
 
-  public init(id: UUID, avatarURL: URL? = nil, username: String, email: String, phoneNumber: String? = nil) {
+  public init(
+    id: UUID,
+    avatarURL: URL? = nil,
+    username: String,
+    email: String,
+    phoneNumber: String? = nil
+  ) {
     self.id = id
     self.avatarURL = avatarURL
     self.username = username
     self.email = email
     self.phoneNumber = phoneNumber
+  }
+}
+
+// Lightweight rules (UI can show nicer messages)
+public enum ProfileRules {
+  public static func validateUsername(_ v: String) -> String? {
+    v.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+      ? nil : "Username must be at least 2 characters."
+  }
+
+  public static func validateEmail(_ v: String) -> String? {
+    let rx = try! NSRegularExpression(
+      pattern: #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#,
+      options: [.caseInsensitive]
+    )
+    return rx.firstMatch(in: v, range: NSRange(location: 0, length: v.utf16.count)) == nil
+      ? "Enter a valid email."
+      : nil
   }
 }
